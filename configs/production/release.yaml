@@ -1,0 +1,27 @@
+project_name: KerrDisk-UQ
+phase: release_reproduction
+runtime:
+  random_seed: 20260622
+  output_root: data/processed/release
+  overwrite: true
+  log_level: INFO
+reproduction:
+  mode_default: archive
+  phase12_config: configs/production/phase12_confirmatory.yaml
+  multi_epoch_config: configs/production/phase13p5_multi_epoch.yaml
+  checksum_paths:
+    - configs
+    - data/processed
+    - paper/figures
+    - paper/tables
+    - paper/figure_captions.md
+    - paper/claim_audit.md
+    - README.md
+    - AI_USAGE.md
+    - CITATION.cff
+    - LICENSE
+    - pyproject.toml
+    - uv.lock
+    - docs
+    - scripts
+    - src

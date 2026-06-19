@@ -1,0 +1,6 @@
+config_version: phase13p5_multi_epoch_v1
+confirmatory_config_path: configs/production/phase12_confirmatory.yaml
+master_seed: 20260621
+replicate_count: 100
+min_epoch_count: 2
+width_reduction_required_fraction: 0.0

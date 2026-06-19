@@ -1,0 +1,7 @@
+category,checks,passed,failed,max_abs_residual_over_tolerance
+disk_flux,1,1,0,0.3416965204792802
+efficiency,6,6,0,0.0
+isco,6,6,0,0.0
+ray_invariant,4,4,0,0.0002220446049250313
+shadow,2,2,0,0.0
+spectrum,1,1,0,0.0

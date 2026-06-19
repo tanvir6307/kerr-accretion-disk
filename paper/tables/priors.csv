@@ -1,0 +1,8 @@
+parameter,lower,upper,unit,prior,scope,status,justification
+spin,-0.998,0.998,dimensionless,uniform,shared,frozen_phase10,"Covers the implemented Kerr spin domain while avoiding the singular extremal endpoints."
+inclination_deg,20,75,deg,uniform,shared,frozen_phase10,"Matches the guide's initial production inclination grid."
+mass_msun,5,15,solar_mass,uniform,shared,frozen_phase10,"Development stellar-mass binary range centered on the 10 solar-mass fiducial system."
+distance_kpc,2,15,kpc,uniform,shared,frozen_phase10,"Development Galactic binary distance range containing the 8 kpc fiducial system."
+f_col,1.4,2.2,dimensionless,uniform,epoch_or_law_parameter,frozen_phase10,"Matches the implemented controlled color-correction clipping domain."
+inner_stress_delta_eta,0,0.1,dimensionless,uniform,shared_or_epoch_sensitivity,frozen_phase10,"Matches the controlled Agol-Krolik weak-stress domain implemented in Phase 8."
+flux_normalization,0.1,10,dimensionless,uniform,epoch_nuisance,frozen_phase10,"Broad positive nuisance normalization for Phase 10 synthetic likelihood calibration tests."

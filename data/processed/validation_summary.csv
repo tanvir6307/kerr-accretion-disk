@@ -1,0 +1,21 @@
+check_id,category,quantity,production_value,reference_value,residual,tolerance,status,notes
+isco_-0.9,isco,r_isco,8.7173522796064891,8.7173522796064891,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_-0.9,efficiency,1_minus_e_isco,0.03899834564528204,0.03899834564528204,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+isco_-0.5,isco,r_isco,7.5545847145123579,7.5545847145123579,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_-0.5,efficiency,1_minus_e_isco,0.045142226952723852,0.045142226952723852,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+isco_0,isco,r_isco,6,6,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_0,efficiency,1_minus_e_isco,0.057190958417936755,0.057190958417936755,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+isco_0.5,isco,r_isco,4.2330025295308262,4.2330025295308262,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_0.5,efficiency,1_minus_e_isco,0.082117993339224093,0.082117993339224093,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+isco_0.9,isco,r_isco,2.3208830417618871,2.3208830417618871,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_0.9,efficiency,1_minus_e_isco,0.15575299199446402,0.15575299199446402,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+isco_0.998,isco,r_isco,1.2369706551751847,1.2369706551751847,0,9.9999999999999998e-13,PASS,Independent BPT expression coded separately.
+efficiency_0.998,efficiency,1_minus_e_isco,0.32099416561619998,0.32099416561619998,0,5.0000000000000002e-11,PASS,Independent circular-orbit energy at independent ISCO.
+radial_ray_pt,ray_invariant,p_t,-0.98994949366116636,-0.98994949366116658,2.2204460492503131e-16,9.9999999999999998e-13,PASS,Analytic Schwarzschild radial photon from static observer.
+radial_ray_pr,ray_invariant,p_r,-1.0101525445522106,-1.0101525445522106,0,9.9999999999999998e-13,PASS,Analytic Schwarzschild radial photon from static observer.
+radial_ray_hamiltonian,ray_invariant,H,0,0,0,9.9999999999999998e-13,PASS,Independent analytic null expectation.
+radial_ray_carter,ray_invariant,Q,0,0,0,9.9999999999999998e-13,PASS,Radial Schwarzschild null ray has Q=0.
+schwarzschild_shadow_bracket,shadow,sqrt27_inside_capture_escape_bracket,0,0,0,0,PASS,Analytic Schwarzschild shadow radius sqrt(27) bracketed by traced rays.
+schwarzschild_shadow_radius_helper,shadow,sqrt27,5.196152422706632,5.196152422706632,0,1e-14,PASS,Analytic Schwarzschild shadow radius.
+page_thorne_flux_profile_a0p5,disk_flux,max_relative_flux_residual,0.00068339304095856035,0,0.00068339304095856035,0.002,PASS,Independent integral uses analytic dOmega/dr and separate finite-difference dL/dr. A coarse 400-point grid initially failed with 1.09e-2 residual near the ISCO; this resolved grid tests the converged profile.
+constant_intensity_observed_spectrum,spectrum,max_abs_flux_density_residual,0,0,0,1.0000000000000001e-18,PASS,Independent analytic sum of g^3 I_nu dOmega for constant intensity.

@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use KerrDisk-UQ, cite the archived release once available."
+title: "KerrDisk-UQ"
+version: "0.1.0"
+date-released: "2026-06-19"
+authors:
+  - family-names: "Hassan"
+    given-names: "Tanvir"
+repository-code: "https://github.com/tanvir6307/kerr-accretion-disk"
+license: "MIT"

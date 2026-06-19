@@ -1,0 +1,80 @@
+[project]
+name = "kerrdisk-uq"
+version = "0.1.0"
+description = "Relativistic thin-disk spectra and uncertainty-quantification scaffolding."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+  { name = "Tanvir Hassan", email = "tanvir6307@gmail.com" }
+]
+keywords = ["astrophysics", "kerr", "accretion-disks", "uncertainty-quantification"]
+dependencies = [
+  "numpy",
+  "scipy",
+  "astropy",
+  "h5py",
+  "xarray",
+  "pandas",
+  "pydantic>=2",
+  "pyyaml",
+  "matplotlib",
+  "numba",
+  "rich",
+  "typer",
+]
+
+[project.optional-dependencies]
+inference = [
+  "emcee",
+  "dynesty",
+  "arviz",
+  "corner",
+]
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "hypothesis",
+  "ruff",
+  "mypy",
+  "pre-commit",
+  "sphinx",
+  "types-PyYAML",
+]
+
+[project.scripts]
+kerrdisk = "kerrdisk.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "kerrdisk"
+module-root = "src"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ANN", "ARG", "C4", "SIM"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ANN201", "S101"]
+"scripts/**/*.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+pretty = true
+files = ["src/kerrdisk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

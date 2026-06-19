@@ -1,0 +1,2 @@
+status,external_path,matched_records,max_relative_radius_delta,max_relative_redshift_delta,max_abs_mu_delta,notes
+SKIPPED,,0,nan,nan,nan,"No external ray-tracer CSV was supplied. Provide a CSV with columns alpha,beta,emission_radius,redshift,emission_mu."

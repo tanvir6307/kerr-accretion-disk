@@ -1,0 +1,12 @@
+project_name: KerrDisk-UQ
+phase: bootstrap
+runtime:
+  random_seed: 20260618
+  output_root: outputs
+  overwrite: false
+  log_level: INFO
+physical_domain:
+  luminosity_eddington_min: 0.03
+  luminosity_eddington_max: 0.30
+  spin_min: -0.998
+  spin_max: 0.998
