@@ -201,6 +201,10 @@ capture/returning-radiation diagnostic samples locally emitted photons from
 selected annuli in the circular-emitter frame and classifies terminal outcomes.
 The external comparison harness compares production transfer records against a
 user-supplied external ray-tracer CSV when one is available.
+`scripts/audit_external_raytracers.py` records whether candidate external
+backends are locally available. This audit does not establish agreement by
+itself; it only documents whether an independent backend is present for a
+future comparison run.
 
 ## Phase 13
 
@@ -232,5 +236,5 @@ fitting improves spin recovery.
 `scripts/reproduce_all.py --mode archive` regenerates paper tables and figures
 from archived processed outputs, then writes a release run manifest and SHA-256
 checksum CSV under `data/processed/release`. `--mode full` is wired to rerun the
-heavy validation, confirmatory, transfer-validation, and multi-epoch commands
-before regenerating paper artifacts.
+heavy validation, confirmatory, transfer-validation, external-backend audit,
+and multi-epoch commands before regenerating paper artifacts.

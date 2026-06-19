@@ -1,0 +1,6 @@
+backend,backend_type,available,version_or_reference,validation_role,notes
+GYOTO,executable,False,,Candidate independent GR ray-tracing executable.,Expected command-line ray tracer; not bundled with this project.
+RAPTOR,executable,False,,Candidate independent GRRT executable.,Expected compiled executable; not bundled with this project.
+grtrans,executable,False,,Candidate independent GRRT executable.,Expected compiled executable; not bundled with this project.
+kgeo,python_module,False,,Candidate independent analytic Kerr ray-tracing Python package.,"Not accepted as an agreement backend until screen-coordinate, redshift, disk-hit, and emission-angle conventions are adapted and validated."
+EinsteinPy,python_module,False,,Candidate independent geodesic-integration Python package.,Not accepted as an agreement backend until a null-geodesic screen-to-disk adapter is implemented and benchmarked.

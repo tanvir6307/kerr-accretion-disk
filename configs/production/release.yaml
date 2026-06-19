@@ -23,5 +23,6 @@ reproduction:
     - pyproject.toml
     - uv.lock
     - docs
+    - literature
     - scripts
     - src

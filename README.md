@@ -29,6 +29,9 @@ adds transfer-map convergence and capture/returning-radiation diagnostics;
 Phase 13 adds generated paper figures, summary tables, figure captions, and a
 claim audit. Phase 13.5 adds a joint two-epoch versus separate single-epoch
 comparison, release reproduction command, run manifest, and checksum manifest.
+External ray-tracer agreement remains unsupported unless a genuine external
+transfer-map CSV is supplied and passed. Bibliography verification currently
+has a machine-readable Crossref report with unresolved manual-review rows.
 Remaining limitations are documented in `docs/validation.md` and
 `paper/claim_audit.md`.
 

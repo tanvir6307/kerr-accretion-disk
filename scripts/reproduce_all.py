@@ -59,6 +59,7 @@ def main(
             _run_full_reproduction(reproduction)
         else:
             _require_archive_inputs()
+        _run_script("scripts/audit_external_raytracers.py")
         _run_script("scripts/make_tables.py")
         _run_script("scripts/make_figures.py")
     except Exception as exc:
@@ -118,6 +119,7 @@ def _run_full_reproduction(reproduction: dict[str, object]) -> None:
     _run_script("scripts/run_validation.py", "page-thorne-flux")
     _run_script("scripts/run_validation.py", "independent")
     _run_script("scripts/run_transfer_validation.py")
+    _run_script("scripts/audit_external_raytracers.py")
     _run_script("scripts/run_confirmatory.py", "--config", phase12_config)
     _run_script("scripts/run_multi_epoch.py", "--config", multi_epoch_config)
 
@@ -135,6 +137,9 @@ def _require_archive_inputs() -> None:
         ROOT
         / "data/processed/transfer_validation"
         / "phase12p5_external_transfer_comparison.csv",
+        ROOT
+        / "data/processed/transfer_validation"
+        / "phase12p5_external_backend_audit.csv",
         ROOT / "data/processed/multi_epoch/phase13p5_multi_epoch_summary.csv",
     ]
     missing = [path for path in required if not path.exists()]

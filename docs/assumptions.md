@@ -83,9 +83,12 @@ This document records project assumptions frozen after the provisional Phase 0 a
 
 ## Open Items
 
-- Verify all `UNVERIFIED` bibliography fields in `literature/references.bib`.
+- Complete manual review for the 16 bibliography entries marked
+  `NEEDS_REVIEW` in `literature/reference_verification.csv`; the remaining 41
+  entries were machine-verified against Crossref by DOI or title/year match.
 - Complete full-text review of the closest competing papers before finalizing Phase 1/2 science requirements.
 - Choose the final inner-stress/plunging-region prescription only after source review.
 - Decide whether retrograde spin is in the first confirmatory grid or reserved for a focused follow-up, based on runtime.
 - Supply an external GYOTO/RAPTOR/grtrans-style transfer-map benchmark CSV, or
-  install and run an external ray tracer, before claiming external agreement.
+  install and run an external ray tracer with a documented adapter, before
+  claiming external agreement.

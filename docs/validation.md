@@ -357,6 +357,7 @@ Generated artifacts:
 - `data/processed/transfer_validation/phase12p5_transfer_convergence.csv`
 - `data/processed/transfer_validation/phase12p5_capture_returning_diagnostics.csv`
 - `data/processed/transfer_validation/phase12p5_external_transfer_comparison.csv`
+- `data/processed/transfer_validation/phase12p5_external_backend_audit.csv`
 
 Outcome on 2026-06-19:
 
@@ -370,6 +371,11 @@ Outcome on 2026-06-19:
   expected strong-field cases.
 - The external comparison artifact is `SKIPPED` because no external
   ray-tracer transfer-map CSV was supplied.
+- The external backend audit found no installed usable GYOTO, RAPTOR, grtrans,
+  kgeo, or EinsteinPy backend in the local environment. A reachable `kgeo`
+  GitHub repository was inspected as a candidate, but it is not accepted as
+  agreement evidence until an adapter with documented screen-coordinate,
+  disk-hit, redshift, and emission-angle conventions is implemented.
 
 ## Phase 13
 
@@ -406,6 +412,11 @@ Outcome on 2026-06-19:
 - Figure captions state the plotted normalization and varied parameters.
 - The claim audit marks external ray-tracer agreement as `UNSUPPORTED` for the
   current final outputs.
+- Bibliography verification was run with `scripts/verify_bibliography.py`.
+  Crossref verified 41 of 57 `literature/references.bib` entries by DOI or
+  high-confidence title/year match. Sixteen entries remain `NEEDS_REVIEW` in
+  `literature/reference_verification.csv` and must be checked against ADS,
+  arXiv, or publisher pages before manuscript use.
 
 ## Phase 13.5
 
@@ -443,5 +454,7 @@ Current limitations:
   fit luminosity or mass/accretion-rate nuisance parameters.
 - External ray-tracer agreement remains `UNSUPPORTED` because no external
   transfer-map CSV or local external ray-tracer executable was available.
-- The release manifest records `git_commit` as `UNAVAILABLE` because the local
-  repository has no committed `HEAD`.
+- Bibliography verification is incomplete: `literature/reference_verification.csv`
+  records 41 machine-verified entries and 16 entries requiring manual review.
+- The archive reproduction manifest records a resolved `git_commit` and an
+  empty warnings list for the latest local archive run.

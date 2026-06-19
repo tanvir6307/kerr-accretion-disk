@@ -33,13 +33,21 @@ def main() -> None:
     external = _read_csv(
         TRANSFER_VALIDATION / "phase12p5_external_transfer_comparison.csv"
     )
+    external_audit = _read_csv(
+        TRANSFER_VALIDATION / "phase12p5_external_backend_audit.csv"
+    )
     multi_epoch = _read_csv(MULTI_EPOCH / "phase13p5_multi_epoch_summary.csv")
 
     design = _write_design_table(confirmatory, replicates, resolution)
     validation_table = _write_validation_table(validation)
     confirmatory_table = _write_confirmatory_table(confirmatory)
     resolution_table = _write_resolution_table(resolution)
-    transfer_table = _write_transfer_table(convergence, capture, external)
+    transfer_table = _write_transfer_table(
+        convergence,
+        capture,
+        external,
+        external_audit,
+    )
     multi_epoch_table = _write_multi_epoch_table(multi_epoch)
     _write_claim_audit(
         design,
@@ -176,6 +184,7 @@ def _write_transfer_table(
     convergence: list[dict[str, str]],
     capture: list[dict[str, str]],
     external: list[dict[str, str]],
+    external_audit: list[dict[str, str]],
 ) -> Path:
     conv_5 = [
         float(row["relative_l1_spectrum_delta"])
@@ -210,6 +219,13 @@ def _write_transfer_table(
             "status": external[0]["status"],
             "source_file": "data/processed/transfer_validation/"
             "phase12p5_external_transfer_comparison.csv",
+        },
+        {
+            "metric": "available_external_backends",
+            "value": sum(row["available"] == "True" for row in external_audit),
+            "status": "RECORDED",
+            "source_file": "data/processed/transfer_validation/"
+            "phase12p5_external_backend_audit.csv",
         },
     ]
     return _write_csv(TABLES / "table5_transfer_validation.csv", rows)
@@ -384,7 +400,8 @@ def _write_claim_audit(
             ),
             "assumptions": "Requires a supplied external transfer-map CSV.",
             "limitations": (
-                "Current artifact status is SKIPPED because no external CSV exists."
+                "Current comparison status is SKIPPED and the backend audit found "
+                "no installed usable external ray tracer."
             ),
             "status": "UNSUPPORTED",
         },
