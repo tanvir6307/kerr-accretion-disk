@@ -73,7 +73,7 @@ def main(
         write_manifest(output_root / "run_manifest.json", final_manifest)
         raise
 
-    checksum_paths = _checksum_paths(raw)
+    checksum_paths = _checksum_paths(raw, output_root=output_root)
     checksums = build_checksum_manifest(checksum_paths, root=ROOT)
     checksum_csv = output_root / "checksums_sha256.csv"
     _write_checksum_csv(checksum_csv, checksums)
@@ -150,7 +150,7 @@ def _run_script(script: str, *args: str) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
 
-def _checksum_paths(raw: dict[str, object]) -> list[Path]:
+def _checksum_paths(raw: dict[str, object], *, output_root: Path) -> list[Path]:
     reproduction = raw.get("reproduction", {})
     configured: object = []
     if isinstance(reproduction, dict):
@@ -167,13 +167,23 @@ def _checksum_paths(raw: dict[str, object]) -> list[Path]:
             paths.extend(
                 path
                 for path in root.rglob("*")
-                if path.is_file() and _include_checksum_path(path)
+                if path.is_file()
+                and _include_checksum_path(path)
+                and not _is_relative_to(path, output_root)
             )
     return paths
 
 
 def _include_checksum_path(path: Path) -> bool:
     return "__pycache__" not in path.parts and path.suffix != ".pyc"
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def _write_checksum_csv(path: Path, checksums: dict[str, str]) -> None:
