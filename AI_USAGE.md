@@ -237,3 +237,22 @@ wrote `data/processed/release/run_manifest.json` plus
 `data/processed/release/checksums_sha256.csv`. External ray-tracer agreement
 remains unsupported because no external benchmark CSV or local external
 ray-tracer executable was available.
+
+## 2026-06-19 External Validation and Bibliography Audits
+
+OpenAI Codex was used to add an external ray-tracer backend availability audit
+and a Crossref-backed bibliography verification script. The audit recorded no
+installed usable external GYOTO, RAPTOR, grtrans, kgeo, or EinsteinPy backend,
+so external ray-tracer agreement remains unsupported. The bibliography report
+machine-verified 41 of 57 entries and marked 16 entries as requiring manual
+review before manuscript use.
+
+## 2026-06-19 Phase 14 Manuscript Draft
+
+OpenAI Codex was used to draft `paper/main.tex` for an APL Computational
+Physics-oriented manuscript and to create `paper/references.bib` containing
+only cited references that were machine-verified in the bibliography audit.
+The draft restricts quantitative statements to versioned tables, figures,
+processed outputs, and `paper/claim_audit.md`. Unsupported external
+ray-tracer agreement, detector-response claims, high-resolution morphology,
+and returning-radiation or photon-capture spectral corrections were excluded.

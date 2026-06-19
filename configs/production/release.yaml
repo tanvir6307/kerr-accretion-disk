@@ -14,6 +14,8 @@ reproduction:
     - data/processed
     - paper/figures
     - paper/tables
+    - paper/main.tex
+    - paper/references.bib
     - paper/figure_captions.md
     - paper/claim_audit.md
     - README.md

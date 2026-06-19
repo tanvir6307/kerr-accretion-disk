@@ -17,3 +17,9 @@ outputs/
 *.nc
 *.fits
 *.log
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.pdf
+paper/mainNotes.bib
