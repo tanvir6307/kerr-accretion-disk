@@ -265,7 +265,6 @@ manuscript tables are produced only from machine-readable files.
 - [`docs/numerical_methods.md`](docs/numerical_methods.md) — algorithms and conventions
 - [`docs/validation.md`](docs/validation.md) — validation results and tolerances
 - [`paper/claim_audit.md`](paper/claim_audit.md) — claims linked to evidence
-- [`AI_USAGE.md`](AI_USAGE.md) — how AI assistance was used and checked
 
 ---
 
