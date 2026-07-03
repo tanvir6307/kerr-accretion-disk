@@ -55,8 +55,14 @@ def run_joint_multi_epoch_campaign(
     *,
     min_epoch_count: int = 2,
     verbose: bool = False,
+    transfer_cache: TransferCache | None = None,
+    emulator_cache: dict[tuple[float, float], SpectralGrid] | None = None,
 ) -> MultiEpochCampaignResult:
-    """Run the color-marginalized separate-versus-joint multi-epoch comparison."""
+    """Run the color-marginalized separate-versus-joint multi-epoch comparison.
+
+    ``transfer_cache`` and ``emulator_cache`` may be supplied to reuse the maps
+    and emulators already built by a companion confirmatory campaign.
+    """
 
     validate_joint_campaign_config(config)
     conf = load_confirmatory_config(config.confirmatory_config_path)
@@ -85,8 +91,10 @@ def run_joint_multi_epoch_campaign(
         )
     )
 
-    transfer_cache: TransferCache = {}
-    emulator_cache: dict[tuple[float, float], SpectralGrid] = {}
+    if transfer_cache is None:
+        transfer_cache = {}
+    if emulator_cache is None:
+        emulator_cache = {}
     replicates: list[MultiEpochReplicate] = []
     summaries: list[MultiEpochSummary] = []
     for index, group in enumerate(groups, start=1):

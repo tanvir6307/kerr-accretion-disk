@@ -155,8 +155,14 @@ def run_joint_confirmatory_campaign(
     config: JointCampaignConfig,
     *,
     verbose: bool = False,
+    transfer_cache: TransferCache | None = None,
+    emulator_cache: dict[tuple[float, float], SpectralGrid] | None = None,
 ) -> ConfirmatoryCampaignResult:
-    """Run the joint marginalized-fit confirmatory campaign."""
+    """Run the joint marginalized-fit confirmatory campaign.
+
+    ``transfer_cache`` and ``emulator_cache`` may be supplied to share the
+    expensive ray-traced maps and emulators with a companion campaign.
+    """
 
     validate_joint_campaign_config(config)
     conf = load_confirmatory_config(config.confirmatory_config_path)
@@ -188,8 +194,10 @@ def run_joint_confirmatory_campaign(
         )
     )
 
-    transfer_cache: TransferCache = {}
-    emulator_cache: dict[tuple[float, float], SpectralGrid] = {}
+    if transfer_cache is None:
+        transfer_cache = {}
+    if emulator_cache is None:
+        emulator_cache = {}
     replicates: list[ConfirmatoryReplicate] = []
     summaries: list[ConfirmatorySummary] = []
     for index, condition in enumerate(conditions, start=1):
