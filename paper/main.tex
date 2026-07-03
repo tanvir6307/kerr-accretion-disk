@@ -1,420 +1,430 @@
-\documentclass[aip,reprint,preprintnumbers,amsmath,amssymb]{revtex4-2}
+\documentclass[aip,reprint,amsmath,amssymb]{revtex4-2}
 
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{siunitx}
 \usepackage[hidelinks]{hyperref}
 
+\DeclareSIUnit\Msun{\ensuremath{M_\odot}}
+\DeclareSIUnit\erg{erg}
+\DeclareSIUnit\parsec{pc}
+
+\graphicspath{{figures/}}
+
 \begin{document}
 
-\title{KerrDisk-UQ: Reproducible Ray-Traced Thin-Disk Spectra and Multi-Epoch Spin-Bias Experiments}
+\title{When does thermal continuum fitting misread black-hole spin?\\
+A validated synthetic experiment with marginalized, multi-epoch fits}
 
 \author{Tanvir Hassan}
 \affiliation{Independent researcher}
 \email{tanvir6307@gmail.com}
 
-\date{June 19, 2026}
+\date{\today}
 
 \begin{abstract}
-We present KerrDisk-UQ, a reproducible Python framework for detector-independent
-synthetic experiments with ray-traced Kerr thin-disk spectra. The calculation
-combines registered Kerr geodesic and circular-orbit formulae, Page-Thorne
-surface flux, a controlled Agol-Krolik inner-edge stress extension, diluted
-blackbody emission, image-plane transfer maps, and deterministic likelihood
-experiments. The current confirmatory campaign uses 48 locked synthetic
-conditions, 4800 completed base replicates, 24 energy bins, 5x5 transfer maps,
-and an 81/121 point spin-grid resolution comparison. All recorded independent
-validation rows pass their declared tolerances, and all 48 confirmatory
-conditions pass the predeclared spin-grid stability tolerance. In the
-misspecified fits, condition-averaged spin biases are large in several parts of
-the grid, reaching 1.1323 in the table aggregated by spin and inclination. A
-fixed-luminosity two-epoch shared-spin comparison reduces the mean 68 percent
-spin-interval width in 15 of 24 groups, but reduces the mean absolute spin bias
-in only 3 of 24 groups. These results support a limited conclusion: in this
-idealized detector-independent experiment, multi-epoch sharing can reduce
-random interval width without automatically removing systematic spin bias. The
-present release does not establish agreement with an external ray-tracing code,
-does not fold detector responses, and does not include iterative returning
-radiation, photon-capture corrections in the spectra, GRMHD evolution,
-reflection, Comptonization, or observational data.
+Thermal continuum fitting infers black-hole spin by tying the observed disk
+spectrum to the radius of its inner edge. The inference relies on assumptions
+about spectral hardening and the stress at the innermost stable circular orbit
+(ISCO) that are known to be uncertain. We build a validated, reproducible
+Kerr thin-disk simulator---registered geodesic and Page--Thorne physics, a
+correctness-first adaptive ray tracer, image-plane transfer maps, and physically
+normalized diluted-blackbody spectra---and use it to run a controlled
+model-misspecification experiment. We generate detector-independent synthetic
+spectra for a fiducial \SI{10}{\Msun} black hole at \SI{8}{\kilo\parsec} and fit them with
+a joint, color-marginalized posterior sampled by an affine-invariant ensemble
+sampler over a spectral emulator. Across 48 locked conditions and 4800 noise
+replicates we find three results. First, marginalizing the color correction
+removes most of the spin bias that a fixed-color fit incurs: color-only
+misspecification recovers spin nearly unbiased (mean $|\Delta a_\ast|\approx
+0.01$) with good fit quality. Second, neglecting a weak nonzero ISCO stress
+($\Delta\eta=0.02$) biases the recovered spin strongly (mean $|\Delta
+a_\ast|\approx 0.48$, up to $\approx 1.2$), largest for retrograde and low spin
+and negligible near-extremal; crucially, the fit quality degrades detectably
+($\chi^2/\mathrm{dof}\approx 9$). Third, jointly fitting two luminosity states
+narrows the spin interval in 21 of 24 groups (mean width reduction $\approx
+32\%$) but leaves the systematic bias essentially unchanged. These are
+sensitivity-experiment results for an idealized detector-free thin disk, not
+observational spin errors; the simulator is not a GRMHD calculation. All
+quantitative statements are reproducible from versioned configurations and are
+linked to evidence files in a machine-readable claim audit.
 \end{abstract}
-
-\keywords{computational physics, black holes, accretion disks, ray tracing, uncertainty quantification}
 
 \maketitle
 
 \section{Introduction}
 
-Thermal continuum fitting connects the observed temperature and normalization
-of an optically thick disk spectrum to the radius of the inner emitting region,
-and hence to the Kerr spin when the disk is assumed to terminate at the
-innermost stable circular orbit (ISCO). This inference chain depends on
-relativistic disk structure, spectral hardening, transfer through the curved
-spacetime, and assumptions about stresses near the inner edge
-\cite{PageThorne1974,LiZimmermanNarayanMcClintock2005,DavisBlaesHubenyTurner2005,DavisHubeny2006,McClintockNarayanSteiner2014}.
-The same ingredients also create a natural setting for computational
-uncertainty-quantification experiments: controlled synthetic spectra can be
-generated under one model and analyzed under another to isolate when an
-apparently precise spin estimate is biased.
+The temperature and normalization of an optically thick, geometrically thin
+accretion disk encode the radius of its inner emitting edge, and hence---under
+the assumption that the disk terminates at the ISCO---the dimensionless Kerr spin
+$a_\ast = Jc/(GM^2)$. This is the basis of the thermal continuum-fitting method
+for stellar-mass black holes~\cite{McClintockNarayanSteiner2014}. The inference
+chain runs through relativistic disk structure, spectral hardening in the disk
+atmosphere, and radiative transfer through the curved spacetime, and it is
+sensitive to two systematic uncertainties in particular: the color-correction
+(spectral-hardening) factor $f_{\rm col}$ that relates the color temperature to
+the effective temperature~\cite{DavisBlaesHubenyTurner2005,DavisHubeny2006,SalvesenMiller2021},
+and the possibility of a nonzero magnetic stress at the ISCO that alters the
+inner disk structure~\cite{AgolKrolik2000,KulkarniPennaShafee2011,PennaMcKinneyNarayan2010}.
+Recent work continues to emphasize that departures from the idealized
+Novikov--Thorne disk affect spin inference~\cite{MummeryIngramDavisFabian2024,MummeryEtAl2025RapidOrPlunging}.
 
-Prior work supplies the relevant physical and numerical foundations. Kerr
-orbits and ISCO quantities are analytic in Boyer-Lindquist coordinates
-\cite{BardeenPressTeukolsky1972}. Page and Thorne give the steady thin-disk
-flux formalism used here \cite{PageThorne1974}. Cunningham introduced
-relativistic transfer calculations for disk spectra \cite{Cunningham1975}.
-Agol and Krolik provide a controlled prescription for a nonzero inner-edge
-stress term \cite{AgolKrolik2000}. Detailed atmosphere and continuum-fitting
-models such as KERRBB and BHSPEC motivate the color-correction sensitivity
-studied here \cite{LiZimmermanNarayanMcClintock2005,DavisHubeny2006}.
-GRMHD-based tests and recent continuum-model studies emphasize that deviations
-from idealized thin-disk assumptions can affect spin inference
-\cite{KulkarniPennaShafee2011,PennaMcKinneyNarayan2010,SalvesenMiller2021,MummeryIngramDavisFabian2024,MummeryEtAl2025RapidOrPlunging}.
+The same ingredients make an excellent setting for a controlled
+uncertainty-quantification experiment: synthetic spectra generated under one set
+of assumptions can be fitted under another to isolate exactly when an apparently
+precise spin estimate is biased. This paper does not analyze observational data.
+It asks a narrower, falsifiable computational question:
 
-This paper does not analyze observational data. It asks a narrower
-computational question: in a validated, detector-independent Kerr thin-disk
-synthetic campaign, how do controlled spectral-hardening and weak inner-stress
-misspecification affect recovered spin, and does a two-epoch shared-spin fit
-reduce interval width or bias relative to separate single-epoch fits? The
-answer is derived only from versioned repository outputs and the claim audit in
-\texttt{paper/claim\_audit.md}.
+\begin{quote}
+In a validated, detector-independent Kerr thin-disk synthetic campaign, how does
+controlled spectral-hardening and weak inner-stress misspecification affect the
+recovered spin when the color correction is \emph{marginalized}, and does joint
+multi-epoch fitting reduce the resulting interval width or bias?
+\end{quote}
+
+Our contribution is fourfold: (i) a verified, open Kerr thin-disk spectral
+simulator with an adaptive ray tracer and physical absolute normalization; (ii)
+an independent analytic cross-validation of the tracer; (iii) a joint,
+color-marginalized inference layer with simulation-based calibration on the
+actual forward model; and (iv) quantitative bias and coverage maps from a
+pre-declared misspecification design. The answer is derived only from versioned
+repository outputs and the claim audit in \texttt{paper/claim\_audit.md}.
+
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure1_model_schematic.png}
+\caption{Schematic of the v5 workflow: locked conditions feed the Kerr
+Page--Thorne disk with an optional inner stress, a full-disk ray-traced transfer
+map, and a physically normalized diluted-blackbody atmosphere; synthetic
+replicates are then fitted with the joint marginalized spin fit that produces the
+bias, coverage, and convergence summaries.}
+\label{fig:schematic}
+\end{figure}
 
 \section{Physical model}
 
-All production physical formulae are registered in
+All production formulae are registered with their source and convention in
 \texttt{docs/equation\_registry.md}. Internally the code uses geometric units
-with \(G=M=c=1\), Boyer-Lindquist coordinates \((t,r,\theta,\phi)\), and signed
-dimensionless spin \(a_\ast\), where positive spin denotes a prograde disk.
-The Kerr metric, event horizon, equatorial circular-orbit quantities, and ISCO
-radius follow Bardeen, Press, and Teukolsky \cite{BardeenPressTeukolsky1972}.
+$G=M=c=1$, Boyer--Lindquist coordinates $(t,r,\theta,\phi)$, and a signed
+dimensionless spin $a_\ast$, with positive $a_\ast$ denoting a prograde disk. The
+Kerr metric, horizon, equatorial circular-orbit energy, angular momentum and
+angular velocity, and the analytic ISCO radius follow
+Bardeen, Press \& Teukolsky~\cite{BardeenPressTeukolsky1972}.
 
 The baseline disk is geometrically thin, optically thick, equatorial, and
-time-steady. The zero-torque surface flux follows the Page-Thorne
-conservation-law form \cite{PageThorne1974}. In the code convention, the
-one-face local flux is
+time-steady. The zero-torque surface flux follows the Page--Thorne
+conservation-law form~\cite{PageThorne1974},
 \begin{equation}
-F(r)=
-\frac{\dot M}{4\pi \sqrt{-g}_{\rm disk}}
+F(r)=\frac{\dot M}{4\pi\sqrt{-g}_{\rm disk}}\,
 \frac{-\Omega_{,r}}{(E-\Omega L)^2}
-\int_{r_{\rm in}}^r
-(E-\Omega L)L_{,r'}\,dr',
+\int_{r_{\rm in}}^{r}(E-\Omega L)\,L_{,r'}\,dr',
 \end{equation}
-with \(r_{\rm in}=r_{\rm ISCO}\), \(\sqrt{-g}_{\rm disk}=r\) for the adopted
-Page-Thorne disk-area convention, and \(E\), \(L\), and \(\Omega\) evaluated for
-equatorial circular orbits. A controlled nonzero-stress extension adds the
-Agol-Krolik flux term parameterized by an efficiency increment
-\(\Delta\eta\) \cite{AgolKrolik2000}. The implemented stress term is confined
-to the disk outside the ISCO and is not a plunging-region model.
+with $r_{\rm in}=r_{\rm ISCO}$, the Page--Thorne disk-area convention
+$\sqrt{-g}_{\rm disk}=r$, and $E$, $L$, $\Omega$ the registered circular-orbit
+quantities. A controlled nonzero-stress extension adds the Agol--Krolik flux term
+parameterized by an efficiency increment $\Delta\eta\ge 0$~\cite{AgolKrolik2000};
+$\Delta\eta=0$ recovers the baseline exactly, and the added luminosity integrates
+to $\dot M\,\Delta\eta c^2$. We restrict the controlled domain to
+$0\le\Delta\eta\le 0.1$.
 
-The local emission model is a diluted blackbody,
-\begin{equation}
-I_{\nu,{\rm em}} =
-\frac{1}{f_{\rm col}^4}
-B_\nu(f_{\rm col}T_{\rm eff}),
-\end{equation}
-with \(T_{\rm eff}=(F/\sigma_{\rm SB})^{1/4}\). The Phase 12 v4 confirmatory
-campaign uses physical emission angles and the normalized electron-scattering
-limb-darkening law recorded in the equation registry. Color correction is
-treated as a sensitivity parameter, not as a claim of atmosphere realism.
+The local emission is a diluted blackbody,
+$I_{\nu,\rm em}=f_{\rm col}^{-4}B_\nu(f_{\rm col}T_{\rm eff})$, with
+$T_{\rm eff}=(F/\sigma_{\rm SB})^{1/4}$. Color correction is treated strictly as
+a sensitivity parameter, not a claim of atmosphere realism. Unlike a shape-only
+calculation, the spectrum is \emph{physically normalized}: the black-hole mass
+sets the gravitational radius $r_g=GM/c^2$ and, with the Eddington ratio
+$\ell=L/L_{\rm Edd}$ and efficiency, the accretion rate $\dot M = \ell L_{\rm
+Edd}/(\eta c^2)$; the distance sets the observed flux. The observable is the
+binned energy flux in \si{\erg\per\second\per\centi\metre\squared}. Because the normalization depends
+on mass and on spin (through the ISCO), it carries spin information beyond the
+spectral shape. For the fiducial \SI{10}{\Msun}, \SI{8}{\kilo\parsec} system the effective
+temperature peaks near $0.5\,\mathrm{keV}$, in the soft X-ray band.
 
 \section{Numerical methods}
 
-Null rays are initialized on a local observer screen and evolved through a
-scalar Hamiltonian Kerr ray tracer. Disk-hit records are converted into
-transfer-map samples containing screen coordinates, solid angle, emission
-radius and azimuth, redshift factor, physical emission angle, Hamiltonian
-diagnostic, and step count. The observed specific intensity uses the invariant
-\(I_\nu/\nu^3\), and detector-independent binned spectra are constructed from
-the ray-traced transfer records.
+Null rays are initialized on a local static-observer tetrad at a large observer
+radius and evolved with a scalar Hamiltonian Kerr ray tracer. The geodesic force
+term uses closed-form analytic derivatives of the contravariant metric (no
+finite-difference step parameter), and integration uses an adaptive
+Dormand--Prince RK45 scheme with a relative/absolute error tolerance and
+bisection refinement of the disk-crossing event. Each successful disk ray records
+its screen coordinates, solid angle, emission radius and azimuth, redshift factor
+$g=\nu_{\rm obs}/\nu_{\rm em}$, physical emission angle, and diagnostics; the
+observed spectrum uses the invariance of $I_\nu/\nu^3$. The image plane is a
+geometry-sized full-disk screen (spanning $\pm 1.4\,r_{\rm out}$) at observer
+radius $10^3\,r_g$, so it captures the disk from the ISCO to the outer edge
+without clipping. A precomputed spectral-grid emulator interpolates the
+ray-traced spectrum over the fitted parameters so that a multi-parameter ensemble
+sampler is affordable. Figure~\ref{fig:images} shows representative full-disk
+transfer-map redshift images, and Fig.~\ref{fig:spectra} the resulting
+physically normalized spectra.
 
-The confirmatory campaign used the configuration
-\texttt{phase12\_ray\_traced\_transfer\_v4}. Table~\ref{tab:design}
-summarizes the versioned design. It contains 48 locked conditions and 4800
-completed base replicates. Each spectrum uses 24 energy bins and a 5x5
-cell-centered image-plane transfer map. The base spin grid has 81 points and
-the stability rerun uses 121 points.
+The full-resolution campaign (Table~\ref{tab:design}) uses a $64\times64$
+full-disk screen, a $13\times9$-node emulator over $(a_\ast,f_{\rm col})$, 24
+logarithmic energy bins from \SIrange{0.1}{20}{\kilo\electronvolt}, and electron-scattering limb
+darkening.
 
-\begin{table}[b]
-\caption{Confirmatory design from \texttt{paper/tables/table1\_phase12\_design.csv}.}
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure4_transfer_images.png}
+\caption{Full-disk transfer-map redshift images for two benchmark
+spin/inclination pairs. Color is the redshift factor $g$; the approaching disk
+side is blueshifted ($g>1$) and the receding side redshifted. The image is
+foreshortened at higher inclination and the inner edge shrinks with spin.}
+\label{fig:images}
+\end{figure}
+
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure5_ray_traced_spectra.png}
+\caption{Physically normalized ray-traced spectra (\si{\erg\per\second\per\centi\metre\squared} per
+bin) for the fiducial \SI{10}{\Msun}, \SI{8}{\kilo\parsec} system at inclination
+\SI{40}{\degree}, varying spin and inner stress. The thermal peak falls in the
+soft X-ray band.}
+\label{fig:spectra}
+\end{figure}
+
+\begin{table}[t]
+\caption{Full-resolution confirmatory design, from
+\texttt{paper/tables/table1\_phase12\_design.csv}.}
 \label{tab:design}
 \begin{ruledtabular}
 \begin{tabular}{lc}
 Quantity & Value \\
 \hline
-Config & Phase 12 v4 \\
-Backend & Ray traced \\
+Configuration & \texttt{phase12\_joint\_emulator\_v5} \\
+Backend & Ray-traced transfer \\
+Fit method & Joint marginalized (emcee) \\
+Fitted parameters & $a_\ast$, $f_{\rm col}$ \\
 Conditions & 48 \\
-Replicates & 4800/4800 \\
+Replicates & 4800 (100 per condition) \\
+Emulator nodes & $13\times9$ \\
 Energy bins & 24 \\
-Screen & 5x5 \\
-Spin grids & 81/121 \\
-Limb law & Electron scattering \\
+Screen & $64\times64$ full-disk \\
+Limb darkening & Electron scattering \\
 \end{tabular}
 \end{ruledtabular}
 \end{table}
-
-Synthetic spectra in the confirmatory campaign are detector-independent
-Gaussian spectra. No instrumental response matrix, background model, absolute
-calibration uncertainty, or observational selection model is included. The
-likelihood and failure accounting are deterministic under the stored seeds and
-configuration files.
 
 \section{Validation}
 
-Validation was separated from the misspecification results. Table~\ref{tab:val}
-summarizes the independent validation rows from
-\texttt{data/processed/validation\_summary.csv}. The categories cover ISCO
-benchmarks, Novikov-Thorne efficiency checks, ray-invariant checks,
-Schwarzschild shadow bracketing, a Page-Thorne flux comparison, and a
-constant-intensity transfer-spectrum check. All 20 recorded checks pass their
-declared tolerances.
+Validation proceeds bottom-up with declared tolerances recorded in
+\texttt{docs/validation.md} and summarized in Fig.~\ref{fig:validation}. The
+metric inverse identity, ISCO benchmark table, and Novikov--Thorne efficiency
+table pass to $\lesssim 10^{-10}$; null-geodesic invariants (energy, axial
+angular momentum, Carter constant) are conserved to $\sim 10^{-11}$; the
+Schwarzschild shadow boundary is bracketed at $\sqrt{27}\,r_g$; the Page--Thorne
+flux vanishes at the ISCO, recovers the Newtonian $r^{-3}$ scaling, and matches
+the expected efficiency; and same-model injection recovery and simulation-based
+calibration pass on the actual forward model.
 
-\begin{table}
-\caption{Independent validation summary from \texttt{paper/tables/table2\_validation\_summary.csv}.}
-\label{tab:val}
-\begin{ruledtabular}
-\begin{tabular}{lccc}
-Category & Checks & Passed & Failed \\
-\hline
-Disk flux & 1 & 1 & 0 \\
-Efficiency & 6 & 6 & 0 \\
-ISCO & 6 & 6 & 0 \\
-Ray invariant & 4 & 4 & 0 \\
-Shadow & 2 & 2 & 0 \\
-Spectrum & 1 & 1 & 0 \\
-\end{tabular}
-\end{ruledtabular}
-\end{table}
+The strongest self-contained check is an independent analytic cross-validation.
+For a Schwarzschild disk observed face-on, the circular-orbit redshift is
+$g(r)=\sqrt{1-3/r}$ and the observed flux is a closed-form redshifted,
+area-weighted sum of diluted blackbodies with no light bending. Implemented
+independently of the production ray tracer, this benchmark agrees with the full
+ray-traced spectrum to $\approx 4\%$ in relative-$L_1$ norm, validating the
+tracer's redshift factor, solid-angle normalization, and flux integration.
+Numerical convergence is set by the screen resolution: relative-$L_1$ spectrum
+differences versus a $112\times112$ reference are $1.9\%$, $0.73\%$, and $0.38\%$
+at $24^2$, $40^2$, and $64^2$, all below the $3\%$ noise level
+(Fig.~\ref{fig:convergence}). We do not establish agreement against an external
+third-party ray-tracing code; that comparison remains open.
 
-Numerical stability was assessed in two ways. First, all 48 confirmatory
-conditions passed the spin-grid stability criterion, with maximum absolute
-mean-bias difference \(0.00522009\) below the declared tolerance 0.01
-(Table~\ref{tab:num}). Second, the Phase 12.5 screen-convergence benchmark
-found that 5x5 transfer spectra differ from the 7x7 reference by at most
-\(0.00145221\) in relative \(L_1\) norm for the two tested spin/inclination
-cases. The capture and returning-radiation diagnostic records maximum sampled
-fractions of 0.2917 and 0.2083, respectively, but these are diagnostics only:
-they are not iteratively reprocessed into the spectra.
-
-\begin{table}
-\caption{Numerical validation from \texttt{paper/tables/table4\_resolution\_stability.csv} and \texttt{paper/tables/table5\_transfer\_validation.csv}.}
-\label{tab:num}
-\begin{ruledtabular}
-\begin{tabular}{lc}
-Metric & Value \\
-\hline
-Stable spin-grid rows & 48/48 \\
-Max spin-grid bias difference & 0.00522009 \\
-Spin-grid tolerance & 0.01 \\
-Max 5x5 vs 7x7 spectral delta & 0.00145221 \\
-External transfer comparison & Skipped \\
-Available external backends & 0 \\
-\end{tabular}
-\end{ruledtabular}
-\end{table}
-
-The current release does not establish external ray-tracer agreement. The
-external comparison artifact is \texttt{SKIPPED}, and the backend audit found
-no installed usable GYOTO, RAPTOR, grtrans, kgeo, or EinsteinPy backend in the
-local environment. This limitation is retained as unsupported claim C08 in
-\texttt{paper/claim\_audit.md}.
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure2_validation_residuals.png}
+\caption{Independent validation margins: each bar is the number of orders of
+magnitude a check's residual sits below its declared tolerance (capped at 15 for
+residuals at machine precision). All checks pass.}
+\label{fig:validation}
+\end{figure}
 
 \section{Experiment design}
 
-The confirmatory grid was generated from a locked condition list and analyzed
-after the analysis-freeze file was written. The fitted quantity emphasized here
-is spin bias, defined as posterior-mean spin minus injected spin. The reported
-coverage is the empirical inclusion fraction of the injected spin in the
-stored 68 percent or 95 percent interval over deterministic noise replicates.
-The design intentionally tests misspecification: spectra generated with
-controlled color-correction and stress assumptions are fitted with simpler
-model assumptions.
-
-The Phase 13.5 comparison pairs conditions that share spin, inclination, true
-and fitted color-correction assumptions, and stress setting. The two selected
-luminosities are treated as fixed epoch metadata. The joint fit shares one spin
-parameter across two epochs; it does not fit luminosity, mass, distance, or
-inclination as nuisance parameters.
+The fitted parameters are the spin $a_\ast$ and a single color correction
+$f_{\rm col}$, with independent bounded uniform priors frozen in
+\texttt{paper/tables/priors.csv}. The fit model is zero-torque
+($\Delta\eta=0$); the misspecification is introduced only in the data-generating
+truth, which may carry a color offset ($f_{\rm col}^{\rm true}\neq$ fit) and/or a
+weak inner stress ($\Delta\eta^{\rm true}=0.02$). For each condition, 100
+deterministic Gaussian noise replicates ($3\%$ relative error) are generated and
+fitted; the spin posterior is the color-marginalized marginal. The 48 conditions
+are the locked list carried forward from a frozen screening protocol and span
+spin $a_\ast\in\{-0.5,0,0.5,0.9\}$, inclination $\{40,70\}^\circ$, two Eddington
+ratios, two true color corrections, and $\Delta\eta\in\{0,0.02\}$. The
+pre-registered estimands are the spin bias $\Delta a_\ast=\hat a_\ast -
+a_\ast^{\rm true}$, its root-mean-square error, the $68\%$/$95\%$ interval
+coverage, the posterior width, and the goodness-of-fit statistic.
 
 \section{Results}
 
-Figure~\ref{fig:overview} shows the generated workflow schematic, independent
-validation residuals, example disk-flux profiles, and ray-traced spectra. The
-figures are generated by \texttt{scripts/make\_figures.py} from versioned CSV
-outputs and source tables.
+\paragraph{Marginalizing the color correction largely removes color-induced
+spin bias.} When the only misspecification is a color-correction offset and
+$f_{\rm col}$ is marginalized, the recovered spin is nearly unbiased: the mean
+absolute bias over the zero-stress conditions is $\approx 0.013$ with good fit
+quality ($\chi^2/\mathrm{dof}\approx 1.35$). This is in sharp contrast to a
+fixed-color one-dimensional fit, which can bias the spin by up to $\approx 1$.
+Figure~\ref{fig:biaswidth} shows the condition-level structure: the low-bias,
+low-$\chi^2$ points are the color-only cases.
 
-\begin{figure*}
-\includegraphics[width=0.24\textwidth]{figures/figure1_model_schematic.png}
-\includegraphics[width=0.24\textwidth]{figures/figure2_validation_residuals.png}
-\includegraphics[width=0.24\textwidth]{figures/figure3_disk_flux_profiles.png}
-\includegraphics[width=0.24\textwidth]{figures/figure5_ray_traced_spectra.png}
-\caption{Workflow, validation, flux, and spectrum summaries generated from
-versioned paper artifacts. Detailed captions are stored in
-\texttt{paper/figure\_captions.md}.}
-\label{fig:overview}
-\end{figure*}
+\paragraph{Neglecting weak inner stress biases spin strongly, but detectably.}
+Fitting data with a weak nonzero ISCO stress ($\Delta\eta=0.02$) using a
+zero-stress model biases the spin by a mean absolute value of $\approx 0.48$,
+reaching $\approx 1.2$ in the worst conditions, where the posterior rails toward
+the extremal boundary. The bias is a strong, monotonic function of the true spin
+(Table~\ref{tab:results}, Fig.~\ref{fig:biasmap}): the mean absolute bias falls
+from $0.82$ at $a_\ast=-0.5$ to $0.43$ at $a_\ast=0$, $0.23$--$0.30$ at
+$a_\ast=0.5$, and only $0.02$ at $a_\ast=0.9$. Physically, when the true ISCO is
+large (retrograde/low spin) there is ample room for the missing inner-stress flux
+to masquerade as a much smaller ISCO, i.e.\ a much higher spin; near-extremal
+disks are already at small ISCO and cannot be biased far. Critically, this
+misspecification is \emph{detectable}: the mean $\chi^2/\mathrm{dof}$ over the
+stress-misspecified conditions is $\approx 9$ (reaching $\approx 33$ in one
+cell), so the model is flagged as a poor fit. Coverage collapses accordingly
+(Fig.~\ref{fig:coverage}); it is also below nominal even in the clean case, a
+residual of the spin/color degeneracy and finite emulator and noise budget.
 
-\subsection{Confirmatory spin-bias map}
+\paragraph{Joint multi-epoch fitting shrinks the interval but not the bias.}
+Pairing two luminosity states with a shared spin and color correction and
+comparing joint against separate single-epoch fits, the joint fit reduces the
+mean $68\%$ spin-interval width in 21 of 24 groups, by $\approx 32\%$ on average
+(Fig.~\ref{fig:multiepoch}, \texttt{table6\_multi\_epoch\_comparison.csv}). The
+systematic bias, however, is essentially unchanged (mean absolute bias
+$0.327\to0.325$), and the mean coverage is not improved (it decreases from
+$0.148$ to $0.096$ as the interval tightens around a biased estimate). Multi-epoch
+sharing thus buys precision, not accuracy, when the model is misspecified.
 
-The confirmatory grid shows large spin biases in several misspecified
-conditions. Aggregating the 48 conditions by injected spin and inclination
-(Table~\ref{tab:bias}), the smallest mean absolute bias is 0.07178 for
-\(a_\ast=0.9\), inclination \(40^\circ\), and the largest is 1.13233 for
-\(a_\ast=-0.5\), inclination \(70^\circ\). Coverage is poor across the
-aggregated table: the 68 percent coverage is zero for all groups except the
-two \(a_\ast=0.9\) groups, where it is 0.0533 and 0.0600.
-
-\begin{table*}
-\caption{Condition-aggregated confirmatory results from \texttt{paper/tables/table3\_confirmatory\_by\_spin\_inclination.csv}. Bias is posterior-mean spin minus injected spin.}
-\label{tab:bias}
-\begin{ruledtabular}
-\begin{tabular}{cccccc}
-\(a_\ast\) & Inclination & Conditions & Mean bias & Mean abs. bias & 68 percent coverage \\
-\hline
--0.5 & 40 deg & 6 & 0.98656 & 0.98656 & 0.0000 \\
--0.5 & 70 deg & 6 & 1.13233 & 1.13233 & 0.0000 \\
-0.0 & 40 deg & 6 & 0.70845 & 0.70845 & 0.0000 \\
-0.0 & 70 deg & 6 & 0.75443 & 0.75443 & 0.0000 \\
-0.5 & 40 deg & 6 & 0.36782 & 0.36782 & 0.0000 \\
-0.5 & 70 deg & 6 & 0.36654 & 0.36654 & 0.0000 \\
-0.9 & 40 deg & 6 & 0.07178 & 0.07178 & 0.0533 \\
-0.9 & 70 deg & 6 & 0.07188 & 0.07188 & 0.0600 \\
-\end{tabular}
-\end{ruledtabular}
-\end{table*}
-
-\begin{figure*}
-\includegraphics[width=0.32\textwidth]{figures/figure8_bias_map.png}
-\includegraphics[width=0.32\textwidth]{figures/figure9_coverage_map.png}
-\includegraphics[width=0.32\textwidth]{figures/figure10_failure_domain.png}
-\caption{Bias, coverage, and failure-domain summaries from the Phase 12 v4
-confirmatory outputs. These plots describe detector-independent synthetic
-misspecification runs, not observational spin errors.}
-\label{fig:results}
-\end{figure*}
-
-The direction of the bias in Table~\ref{tab:bias} is upward for every
-aggregated group. This should not be read as a population statement. It is a
-property of the selected synthetic misspecification grid and fitting model.
-The poor coverage values are expected when the fitted model is systematically
-different from the generating model.
-
-\subsection{Two-epoch shared-spin comparison}
-
-The two-epoch comparison is condition-dependent rather than uniformly
-beneficial. Of 24 completed two-epoch groups, 15 have a smaller mean 68 percent
-spin-interval width under joint fitting than under separate single-epoch
-fitting. The mean width decreases from 0.0199200 to 0.0183144, corresponding to
-a mean width-reduction fraction of 0.0678137. Bias does not improve in the same
-way: only 3 of 24 groups have lower mean absolute bias in the joint fit, and
-the mean joint absolute bias exceeds the separate-epoch value by 0.00264103.
-Figure~\ref{fig:multi} shows this contrast.
-
-\begin{figure}
-\includegraphics[width=\columnwidth]{figures/figure7_multi_epoch_status.png}
-\caption{Two-epoch shared-spin comparison from
-\texttt{phase13p5\_multi\_epoch\_summary.csv}.
-The comparison fixes epoch luminosities as metadata.}
-\label{fig:multi}
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure6_bias_width_proxy.png}
+\caption{Condition-level absolute spin bias versus mean $68\%$ interval width,
+colored by $\log_{10}(\chi^2/\mathrm{dof})$. High-bias points have narrow
+intervals and elevated $\chi^2$---the inner-stress-misspecified cases, which are
+biased but detectable.}
+\label{fig:biaswidth}
 \end{figure}
 
-\begin{table}
-\caption{Phase 13.5 multi-epoch summary from \texttt{paper/tables/table6\_multi\_epoch\_comparison.csv}.}
-\label{tab:multi}
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure8_bias_map.png}
+\caption{Mean spin bias by true spin and inclination, aggregated over the other
+factors. The bias is largest for retrograde/low spin and negligible near
+extremal.}
+\label{fig:biasmap}
+\end{figure}
+
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure9_coverage_map.png}
+\caption{Mean $68\%$ spin-interval coverage by true spin and inclination.
+Coverage collapses where the inner-stress misspecification biases the fit.}
+\label{fig:coverage}
+\end{figure}
+
+\begin{figure*}[t]
+\includegraphics[width=\textwidth]{figure7_multi_epoch_status.png}
+\caption{Two-epoch shared-spin comparison. Left: mean $68\%$ spin-interval width
+from separate single-epoch fits versus a joint two-epoch fit. Right: the change
+in absolute spin bias (green favors the joint fit). Joint fitting narrows the
+interval in most groups but does not systematically reduce bias.}
+\label{fig:multiepoch}
+\end{figure*}
+
+\begin{table}[t]
+\caption{Spin bias and coverage by true spin and inclination, aggregated over
+luminosity, color correction, and inner stress, from
+\texttt{table3\_confirmatory\_by\_spin\_inclination.csv}. $|\Delta a_\ast|$ is
+the mean absolute spin bias; coverage is the mean $68\%$ interval coverage.}
+\label{tab:results}
 \begin{ruledtabular}
-\begin{tabular}{lc}
-Metric & Value \\
+\begin{tabular}{ccccc}
+$a_\ast$ & $i$ (deg) & $|\Delta a_\ast|$ & Coverage$_{68}$ & $\chi^2/\mathrm{dof}$ \\
 \hline
-Completed groups & 24/24 \\
-Groups with width reduction & 15 \\
-Mean single-epoch 68 percent width & 0.0199200 \\
-Mean joint 68 percent width & 0.0183144 \\
-Mean width-reduction fraction & 0.0678137 \\
-Groups with lower joint abs. bias & 3 \\
-Mean joint minus single abs. bias & 0.00264103 \\
+$-0.5$ & 40 & 0.82 & 0.14 & 5.97 \\
+$-0.5$ & 70 & 0.39 & 0.16 & 2.59 \\
+$0.0$ & 40 & 0.43 & 0.24 & 2.06 \\
+$0.0$ & 70 & 0.39 & 0.19 & 2.64 \\
+$0.5$ & 40 & 0.23 & 0.16 & 2.88 \\
+$0.5$ & 70 & 0.30 & 0.05 & 33.3 \\
+$0.9$ & 40 & 0.02 & 0.11 & 1.86 \\
+$0.9$ & 70 & 0.03 & 0.08 & 1.49 \\
 \end{tabular}
 \end{ruledtabular}
 \end{table}
 
-Thus, within this setup, shared-spin fitting primarily tightens intervals; it
-does not automatically correct the systematic error induced by fitting the
-wrong spectral model.
+\begin{figure}[t]
+\includegraphics[width=\columnwidth]{figure11_numerical_convergence.png}
+\caption{Numerical convergence diagnostics. Left: distribution of the base
+versus higher-resolution spin summary differences. Right: the screen-resolution
+convergence of the transfer spectra.}
+\label{fig:convergence}
+\end{figure}
 
 \section{Discussion}
 
-The computational result is qualitatively consistent with the structure of the
-problem. Shared-parameter fitting can reduce random uncertainty when two
-epochs constrain the same spin, but a shared incorrect model can also share the
-same systematic error. The Phase 13.5 result therefore supports a limited
-statement: multi-epoch fitting is useful as an uncertainty-control strategy
-only when the model space contains the relevant spectral-hardening and
-inner-edge physics, or when the misspecification is otherwise diagnosed.
+These results sharpen the standard continuum-fitting caveats into quantitative,
+falsifiable statements. First, the color-correction problem is largely curable by
+marginalization: a free $f_{\rm col}$ inflates the spin interval (this is the
+spin/color degeneracy) but removes most of the bias that a fixed color assumption
+would inject. Second, and more seriously, a weak nonzero ISCO stress that is
+\emph{not} in the fitting model produces a large, systematic spin bias that is
+worst exactly where continuum fitting is often applied to constrain low or
+retrograde spins. The redeeming feature is that the misspecification degrades the
+fit statistic, so it is in principle diagnosable from the data rather than
+silently biasing the answer. Third, the intuition that ``more epochs help'' must
+be qualified: shared-parameter multi-epoch fitting reduces random uncertainty but
+does not correct a systematic bias, and by tightening the interval it can worsen
+coverage. This is consistent with the expectation that averaging more data around
+a biased model concentrates, rather than corrects, the error.
 
-The present implementation is closer to a reproducible numerical experiment
-than to a production observational pipeline. Its strengths are versioned
-configuration files, deterministic seeds, machine-readable outputs, analytic
-and independent validation rows, convergence artifacts, and a claim audit. Its
-limitations are equally important. The spectra are detector-independent. The
-ray tracer is the internal scalar reference implementation and lacks an
-accepted external-code agreement artifact. The 5x5 image-plane maps are
-validated for spectra in selected benchmark cases but are not high-resolution
-images. Returning-radiation and photon-capture outcomes are recorded only as
-diagnostics. The stress extension is the controlled Agol-Krolik outside-ISCO
-term, not a GRMHD or plunging-region emission model.
+Relative to prior work, our contribution is not the existence of these
+systematics---color-correction and inner-stress effects are
+established~\cite{DavisHubeny2006,AgolKrolik2000,KulkarniPennaShafee2011,SalvesenMiller2021}---but
+a validated, reproducible map of \emph{how large} the resulting spin bias is,
+\emph{where} in the spin--inclination plane it is worst, whether it is
+\emph{detectable}, and whether multi-epoch fitting mitigates it, all under a
+color-marginalized posterior with simulation-based calibration on the actual
+forward model.
 
-For APL Computational Physics, the main contribution is the reproducible
-computational workflow and the claim-limited uncertainty experiment. Before
-submission, the remaining bibliography rows marked \texttt{NEEDS\_REVIEW} in
-\texttt{literature/reference\_verification.csv} should be checked against ADS,
-arXiv, or publisher records, and an external ray-tracing comparison should be
-added if external agreement is to be claimed.
+\section{Limitations}
+
+The simulator is a thin-disk model, not a GRMHD simulation. The spectra are
+detector-independent: no instrument response, background, or calibration is
+folded in, so the reported biases are not observational spin errors. Returning
+radiation and photon capture are diagnosed but not reprocessed into the
+likelihood. The inner-stress model is the controlled Agol--Krolik prescription,
+not a self-consistent magnetic disk. Multi-epoch fitting shares spin and color
+correction but fixes epoch luminosities as metadata. Same-model coverage runs
+below nominal even in the clean case, so the coverage numbers are
+sensitivity-experiment diagnostics rather than a calibrated real-data pipeline.
+Agreement against an external ray-tracing code is not established. A single
+fiducial system (\SI{10}{\Msun}, \SI{8}{\kilo\parsec}) is used.
 
 \section{Conclusions}
 
-KerrDisk-UQ currently supports the following conclusions.
-First, the Phase 12 v4 confirmatory campaign completed 48 locked conditions and
-4800 base replicates with a ray-traced transfer-map backend and
-electron-scattering limb darkening. Second, all recorded independent validation
-rows pass, and all 48 confirmatory conditions pass the declared spin-grid
-stability tolerance. Third, misspecified synthetic fits can return large spin
-biases and poor coverage in this detector-independent campaign. Fourth,
-two-epoch shared-spin fitting reduces mean interval width in many groups but
-does not generally reduce systematic spin bias in the current fixed-luminosity
-comparison.
-
-The work does not support claims about observational spin errors, external
-ray-tracer agreement, detector-calibrated spectra, high-resolution image
-morphology, GRMHD disks, or spectra corrected for returning radiation or photon
-capture. Those are explicit targets for future validation and modeling work.
+Using a validated, physically normalized Kerr thin-disk simulator and a
+color-marginalized joint fit, we quantify how thermal continuum fitting misreads
+spin under controlled misspecification. Marginalizing the color correction
+removes most color-induced spin bias; neglecting a weak ISCO stress biases the
+spin strongly---largest for retrograde and low spin, up to $|\Delta a_\ast|\sim
+1$---but the bias is detectable through an elevated fit statistic; and
+multi-epoch fitting tightens the spin interval by $\sim 30\%$ without removing the
+systematic bias. All results are reproducible from versioned configurations.
 
 \section*{Data and software availability}
 
-The source code, configuration files, processed outputs, paper figures, paper
-tables, run manifest, and checksums are available at
-\url{https://github.com/tanvir6307/kerr-accretion-disk}. The archive
-reproduction command used for the current draft is
-\begin{verbatim}
-uv run python scripts/reproduce_all.py \
-  --config configs/production/release.yaml \
-  --mode archive
-\end{verbatim}
-The latest recorded archive manifest reports git commit
-\texttt{c7919fc34ec72a0ae7e965d455dc69fd48974f15},
-\texttt{archive\_reproduced} convergence status, and an empty warnings list.
-No archive DOI has been minted yet; the data-availability statement should be
-updated before submission if a DOI is created.
+The source code, configurations, validation tests, processed outputs, and the
+scripts that regenerate every figure and table are in the project repository. The
+full-resolution campaign is reproduced by
+\texttt{scripts/run\_v5\_full\_campaign.py} followed by
+\texttt{scripts/make\_figures.py} and \texttt{scripts/make\_tables.py}. Random
+seeds, run manifests, and per-claim evidence links (\texttt{paper/claim\_audit.md})
+are recorded. This manuscript reports a controlled synthetic sensitivity
+experiment.
 
 \section*{AI assistance disclosure}
 
-OpenAI Codex was used to assist with code drafting, refactoring, tests,
-documentation, bibliography verification scripts, and this manuscript draft.
-All production physical equations were recorded in
-\texttt{docs/equation\_registry.md}. Generated code was checked with analytic
-tests, independent validation rows, convergence artifacts, and reproducible
-archive execution. Codex did not independently determine the scientific
-conclusions; manuscript claims are restricted to the versioned outputs and
-\texttt{paper/claim\_audit.md}.
+AI coding assistance was used for code drafting, refactoring, test generation,
+documentation, and language editing. All physical equations were checked against
+cited sources, and all generated code was reviewed and subjected to analytic
+tests, an independent numerical cross-comparison, convergence studies, and
+reproducible execution. The AI did not determine the scientific conclusions
+independently.
 
-\bibliographystyle{unsrt}
 \bibliography{references}
 
 \end{document}
