@@ -19,7 +19,7 @@ supports.
 - **Language / tooling:** Python ≥ 3.12, managed with [`uv`](https://docs.astral.sh/uv/)
 - **Quality gate:** 330 tests passing; `ruff`, `ruff format`, and strict `mypy` clean
 - **License:** MIT
-- **Status:** Validated pipeline with a first *reduced-resolution* v5 science run.
+- **Status:** Validated pipeline with a full-resolution v5 science run.
   This is a research codebase, not a submitted paper — see
   [Status & honest limitations](#status--honest-limitations).
 
@@ -75,26 +75,23 @@ is **not yet established** and is documented as such.
 
 ---
 
-## Key results (first reduced-resolution v5 run)
+## Key results (full-resolution v5 run)
 
-From the joint marginalized-fit campaign (48 locked conditions, 30 replicates,
-fiducial 10 M⊙ black hole at 8 kpc):
+From the joint marginalized-fit campaign (48 locked conditions, 100 replicates,
+64×64 full-disk screen, 13×9-node emulator, fiducial 10 M⊙ black hole at 8 kpc):
 
-- **Marginalizing the color correction collapses the spin bias.** Condition-mean
-  spin bias is modest (range ≈ −0.26 to +0.41, mean ≈ 0.04) — versus the old
-  fixed-color one-dimensional fit, where it reached ≈ 1.1.
-- **Inner-stress misspecification is dangerous but detectable.** Conditions with
-  neglected inner-edge stress stay biased with *narrow* intervals and *elevated*
-  χ²/dof (≈ 6–7); color-correction-only cases recover spin with honest, wider
-  intervals.
-- **Multi-epoch fitting helps some conditions, not all.** Joint two-epoch fitting
-  reduced the mean 68% spin-interval width in 12 of 24 groups; the change in bias
-  is condition-dependent.
-
-> These are results from a deliberately reduced-resolution first run (24×24
-> full-disk screen, 9×5 emulator nodes, 30 replicates). They demonstrate the
-> corrected pipeline and the qualitative science; the exact coverage numbers are
-> resolution-limited. See [limitations](#status--honest-limitations).
+- **Color correction alone barely biases spin — when marginalized.** With the
+  color correction free, color-only-misspecified conditions recover spin nearly
+  unbiased (mean |bias| ≈ 0.01) with good fit quality (χ²/dof ≈ 1.35). The old
+  fixed-color one-dimensional fit, by contrast, biased spin by up to ≈ 1.1.
+- **Neglecting weak inner-edge stress is dangerous but detectable.** Fitting
+  stressed data (Δη = 0.02) with a zero-stress model biases spin strongly
+  (mean |bias| ≈ 0.48, up to ≈ 1.2, railing toward extremal) — but the fit
+  quality degrades detectably (χ²/dof ≈ 9). The bias is largest for
+  retrograde/low true spin and negligible near-extremal.
+- **Multi-epoch fitting usually tightens the spin constraint.** Joint two-epoch
+  fitting reduced the mean 68% spin-interval width in 21 of 24 groups; the
+  change in bias is condition-dependent.
 
 Figures are in [`paper/figures/`](paper/figures/), generated only from versioned
 outputs by [`scripts/make_figures.py`](scripts/make_figures.py); the claim audit
@@ -154,21 +151,21 @@ spectrum = ray_traced_kerr_thin_disk_energy_flux(  # erg s^-1 cm^-2 per bin
 The joint marginalized-fit v5 campaign and its figures/tables:
 
 ```bash
-# 1. confirmatory campaign (builds emulators from ray-traced maps, emcee fits)
-uv run python scripts/run_joint_campaign.py
+# full-resolution campaign: confirmatory + multi-epoch, sharing one map cache
+uv run python scripts/run_v5_full_campaign.py
 
-# 2. multi-epoch comparison
-uv run python scripts/run_joint_multi_epoch.py
-
-# 3. regenerate figures, tables, and the claim audit from the outputs
+# regenerate figures, tables, and the claim audit from the outputs
 uv run python scripts/make_figures.py
 uv run python scripts/make_tables.py
 ```
 
-Configuration lives in [`configs/production/phase12_joint_v5.yaml`](configs/production/phase12_joint_v5.yaml).
-The reduced-resolution run finishes in ~30 min on a single core; a
-full-resolution run (64×64 screen, denser emulator nodes, 100 replicates) is a
-longer job.
+The full-resolution combined run (64×64 screen, 13×9 emulator nodes, 100
+replicates) takes ~2.6 h on a single core; the maps dominate the cost.
+Faster reduced-resolution runners
+([`scripts/run_joint_campaign.py`](scripts/run_joint_campaign.py),
+[`scripts/run_joint_multi_epoch.py`](scripts/run_joint_multi_epoch.py), ~30 min)
+are also available. Configurations live in
+[`configs/production/`](configs/production/).
 
 ---
 
@@ -221,10 +218,12 @@ Details: [`docs/numerical_methods.md`](docs/numerical_methods.md),
 This is an in-progress research codebase. Known limitations, all documented in
 the code, docs, and claim audit:
 
-- The published-here v5 results are a **reduced-resolution first run**
-  (24×24 screen, 9×5 emulator nodes, 30 replicates). Same-model coverage is
-  degraded both by genuine misspecification and by the coarse resolution; a
-  full-resolution campaign is required before headline coverage claims.
+- **Coverage is imperfect even in the clean case.** Under color-only
+  misspecification the fit is nearly unbiased, but same-model 68% interval
+  coverage runs below nominal (residual spin/color degeneracy and finite
+  emulator/noise). Coverage collapses, as expected, under inner-stress
+  misspecification. These are sensitivity-experiment numbers, not a calibrated
+  real-data pipeline.
 - **External ray-tracer agreement is not established.** The independent
   *analytic* face-on cross-validation passes, but a comparison against an
   installed third-party GR ray tracer is still pending.
@@ -272,6 +271,6 @@ manuscript tables are produced only from machine-readable files.
 
 Released under the [MIT License](LICENSE). Citation metadata is in
 [`CITATION.cff`](CITATION.cff). If you use this code, please cite it and note
-that the results here are from a reduced-resolution validation run.
+that the results here are from a controlled synthetic sensitivity experiment.
 
 Author: Tanvir Hassan.

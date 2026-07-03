@@ -504,33 +504,38 @@ is built once from full-disk ray-traced transfer maps, and every replicate is
 fitted with the affine-invariant ensemble sampler; the spin posterior is the
 color-marginalized marginal.
 
-Run settings (reduced-resolution first v5 run):
+Run settings (full-resolution v5 run):
 
-- 48 locked conditions, 30 replicates per condition.
-- 24x24 full-disk screen (relative-L1 ~1.9 percent versus the 112x112 reference,
-  below the 3 percent Gaussian noise), observer at `1000 r_g`, fiducial
-  ten-solar-mass black hole at 8 kpc.
-- Emulator nodes: 9 spin, 5 color-correction; emcee with 16 walkers, 350 draws,
-  200 burn-in.
-- Runners: `scripts/run_joint_campaign.py`, `scripts/run_joint_multi_epoch.py`;
-  config `configs/production/phase12_joint_v5.yaml`.
+- 48 locked conditions, 100 replicates per condition.
+- 64x64 full-disk screen (relative-L1 ~0.38 percent versus the 112x112
+  reference), observer at `1000 r_g`, fiducial ten-solar-mass black hole at
+  8 kpc.
+- Emulator nodes: 13 spin, 9 color-correction; emcee with 16 walkers, 400 draws,
+  250 burn-in.
+- Runner: `scripts/run_v5_full_campaign.py` (confirmatory and multi-epoch share
+  one transfer-map cache); config `configs/production/phase12_joint_v5_full.yaml`.
+  Faster reduced-resolution runners are also provided.
 
 Outcome:
 
-- Confirmatory: 48/48 conditions completed. Under color-correction
-  marginalization the condition-mean spin bias is modest (range about `-0.26`
-  to `+0.41`, mean `~0.04`), far smaller than the earlier one-dimensional-fit
-  values that reached `~1.1`. The inner-stress-misspecified conditions
-  (`Delta_eta = 0.02`) remain biased with elevated `chi2/dof` (about `6-7`),
-  while zero-stress conditions with only color-correction offset recover spin
-  with wider intervals and better coverage.
+- Confirmatory: 48/48 conditions completed. Split by misspecification type:
+  - Color-only-misspecified conditions (`Delta_eta = 0`, color correction
+    marginalized) recover spin nearly unbiased (mean absolute bias `~0.013`)
+    with good fit quality (mean `chi2/dof ~1.35`) and 68 percent coverage
+    `~0.40`.
+  - Inner-stress-misspecified conditions (`Delta_eta = 0.02`, fitted with a
+    zero-stress model) are strongly biased (mean absolute bias `~0.48`, up to
+    `~1.2`, railing toward extremal), with collapsed coverage (`~0.01`) and
+    elevated `chi2/dof (~9)` that flags the misspecification. The bias is largest
+    for retrograde/low true spin and negligible near-extremal.
 - Multi-epoch: 24/24 groups completed; joint two-epoch fitting reduced the mean
-  68 percent spin-interval width in 12 of 24 groups, and the change in spin bias
+  68 percent spin-interval width in 21 of 24 groups, and the change in spin bias
   is condition-dependent.
 
 Limitations:
 
-- This is a reduced-resolution first v5 run. Same-model coverage is degraded
-  both by genuine misspecification and by the coarse emulator/screen resolution;
-  the full-resolution campaign (64x64 screen, denser emulator nodes, and more
-  replicates) is a separate compute job.
+- Same-model 68 percent coverage runs below nominal even in the clean color-only
+  case (residual spin/color degeneracy and finite emulator/noise). These are
+  controlled synthetic sensitivity-experiment numbers, not a calibrated
+  real-data pipeline; no detector response, background, or calibration is
+  folded in.

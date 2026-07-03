@@ -103,12 +103,12 @@ def _write_design_table(
         "completed_condition_summaries": sum(
             row["status"] == "COMPLETED" for row in confirmatory
         ),
-        "emulator_spin_nodes": 9,
-        "emulator_f_col_nodes": 5,
+        "emulator_spin_nodes": 13,
+        "emulator_f_col_nodes": 9,
         "energy_bin_count": 24,
-        "ray_screen_size": "24x24",
+        "ray_screen_size": "64x64",
         "limb_darkening": "electron_scattering",
-        "config_file": "configs/production/phase12_joint_v5.yaml",
+        "config_file": "configs/production/phase12_joint_v5_full.yaml",
     }
     return _write_csv(TABLES / "table1_phase12_design.csv", [row])
 
@@ -280,25 +280,25 @@ def _write_claim_audit(
             "claim_id": "C01",
             "manuscript_location": "Results; Figure 1; Table 1",
             "claim_text": (
-                "The v5 confirmatory campaign used the corrected full-disk "
-                "ray_traced_transfer backend with physical absolute normalization "
-                "and a joint marginalized fit (emcee over spin and color "
-                "correction using a spectral emulator) across 48 locked "
-                "conditions, 30 replicates per condition, a 24x24 full-disk screen, "
-                "and electron-scattering limb darkening."
+                "The full-resolution v5 confirmatory campaign used the corrected "
+                "full-disk ray_traced_transfer backend with physical absolute "
+                "normalization and a joint marginalized fit (emcee over spin and "
+                "color correction using a 13x9-node spectral emulator) across 48 "
+                "locked conditions, 100 replicates per condition, a 64x64 "
+                "full-disk screen, and electron-scattering limb darkening."
             ),
             "evidence_file": _rel(design),
             "figure_or_table": "Figure 1; Table 1",
             "analysis_script": (
-                "scripts/run_joint_campaign.py; scripts/make_tables.py"
+                "scripts/run_v5_full_campaign.py; scripts/make_tables.py"
             ),
             "assumptions": (
                 "Detector-independent Gaussian synthetic spectra; fiducial "
                 "ten-solar-mass black hole at 8 kpc."
             ),
             "limitations": (
-                "Reduced-resolution first v5 run (24x24 screen, 9x5 emulator "
-                "nodes, 30 replicates); no detector response or calibration model."
+                "No detector response, background, or calibration model; "
+                "single fiducial system."
             ),
             "status": "SUPPORTED",
         },
@@ -317,15 +317,20 @@ def _write_claim_audit(
             "claim_id": "C03",
             "manuscript_location": "Results; Figure 8; Table 3",
             "claim_text": (
-                "Under color-correction marginalization the spin bias is modest "
-                "across the grid, but the inner-stress-misspecified conditions "
-                "remain biased and show elevated chi-square."
+                "With the color correction marginalized, color-only-misspecified "
+                "conditions recover spin nearly unbiased (mean absolute bias about "
+                "0.01) with good fit quality (mean chi2/dof about 1.35), whereas "
+                "neglecting weak inner-edge stress biases the spin strongly (mean "
+                "absolute bias about 0.48, up to about 1.2) with elevated chi2/dof "
+                "(about 9), so the misspecification is detectable."
             ),
             "evidence_file": (
                 "data/processed/confirmatory/phase12_results_unblinded.csv"
             ),
             "figure_or_table": "Figure 6; Figure 8; Table 3",
-            "analysis_script": "scripts/run_joint_campaign.py; scripts/make_figures.py",
+            "analysis_script": (
+                "scripts/run_v5_full_campaign.py; scripts/make_figures.py"
+            ),
             "assumptions": "Bias is posterior-mean spin minus injected spin.",
             "limitations": "Sensitivity-model result; no causal observational claim.",
             "status": "SUPPORTED",
@@ -339,15 +344,18 @@ def _write_claim_audit(
             ),
             "evidence_file": _rel(confirmatory_table),
             "figure_or_table": "Figure 9; Table 3",
-            "analysis_script": "scripts/run_joint_campaign.py; scripts/make_figures.py",
+            "analysis_script": (
+                "scripts/run_v5_full_campaign.py; scripts/make_figures.py"
+            ),
             "assumptions": (
-                "Coverage estimated from 30 deterministic noise replicates per "
+                "Coverage estimated from 100 deterministic noise replicates per "
                 "condition."
             ),
             "limitations": (
-                "Coverage is degraded both by genuine misspecification and by the "
-                "reduced emulator/screen resolution of this first v5 run; not a "
-                "full Bayesian calibration campaign for real data."
+                "Coverage collapses under inner-stress misspecification; even the "
+                "color-only cases remain somewhat under-covered from the residual "
+                "spin/color degeneracy. Not a full Bayesian calibration for real "
+                "data."
             ),
             "status": "SUPPORTED",
         },
@@ -425,15 +433,16 @@ def _write_claim_audit(
             "claim_id": "C09",
             "manuscript_location": "Results; Figure 7",
             "claim_text": (
-                "The v5 joint marginalized multi-epoch comparison shares spin and "
-                "color correction across two luminosity epochs; joint fitting "
-                "reduced the mean 68 percent spin-interval width in 12 of 24 "
-                "groups, and the change in spin bias is condition-dependent."
+                "The full-resolution v5 joint marginalized multi-epoch comparison "
+                "shares spin and color correction across two luminosity epochs; "
+                "joint fitting reduced the mean 68 percent spin-interval width in "
+                "21 of 24 groups, and the change in spin bias is condition-"
+                "dependent."
             ),
             "evidence_file": _rel(multi_epoch_table),
             "figure_or_table": "Figure 7; Table 6",
             "analysis_script": (
-                "scripts/run_joint_multi_epoch.py; scripts/make_figures.py"
+                "scripts/run_v5_full_campaign.py; scripts/make_figures.py"
             ),
             "assumptions": (
                 "Two luminosity epochs are paired at fixed spin, inclination, and "
@@ -441,7 +450,7 @@ def _write_claim_audit(
             ),
             "limitations": (
                 "Epoch luminosities are fixed metadata, not fitted nuisance "
-                "parameters; reduced-resolution first v5 run; no detector response."
+                "parameters; no detector response."
             ),
             "status": "SUPPORTED",
         },
