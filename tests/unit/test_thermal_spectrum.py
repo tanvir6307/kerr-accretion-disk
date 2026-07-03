@@ -16,7 +16,6 @@ def _settings() -> KerrThinDiskSettings:
     return KerrThinDiskSettings(
         radial_grid_count=48,
         disk_outer_radius_rg=500.0,
-        temperature_scale_kev=20.0,
     )
 
 
@@ -88,8 +87,54 @@ def test_kerr_thin_disk_spectrum_changes_with_spin_and_stress() -> None:
         settings=_settings(),
     )
 
-    assert not np.allclose(base, high_spin)
-    assert not np.allclose(base, stressed)
+    # Physical fluxes are small (erg/s/cm^2), so compare relative to their scale.
+    assert np.max(np.abs(base - high_spin)) > 1.0e-3 * np.max(base)
+    assert np.max(np.abs(base - stressed)) > 1.0e-3 * np.max(base)
+
+
+def test_kerr_thin_disk_spectrum_scales_as_inverse_distance_squared() -> None:
+    bins = make_log_energy_bins(bin_count=16)
+
+    def flux(distance_kpc: float) -> np.ndarray:
+        return kerr_thin_disk_energy_flux(
+            a_star=0.7,
+            inclination_deg=45.0,
+            eddington_ratio=0.1,
+            f_col=1.7,
+            delta_eta=0.0,
+            energy_bins=bins,
+            settings=KerrThinDiskSettings(
+                radial_grid_count=120,
+                disk_outer_radius_rg=1_000.0,
+                distance_kpc=distance_kpc,
+            ),
+        )
+
+    near = flux(8.0)
+    far = flux(16.0)
+
+    assert np.sum(far) == pytest.approx(0.25 * np.sum(near), rel=1.0e-6)
+
+
+def test_kerr_thin_disk_peak_temperature_is_x_ray_band() -> None:
+    from kerrdisk.constants import BOLTZMANN_CONSTANT_J_K, KILO_ELECTRON_VOLT_J
+    from kerrdisk.thermal_spectrum import _effective_temperature_profile
+
+    _, temperature_k = _effective_temperature_profile(
+        a_star=0.7,
+        eddington_ratio=0.1,
+        delta_eta=0.0,
+        settings=KerrThinDiskSettings(
+            radial_grid_count=200,
+            disk_outer_radius_rg=1_000.0,
+        ),
+    )
+    peak_kt_kev = (
+        BOLTZMANN_CONSTANT_J_K * float(temperature_k.max()) / KILO_ELECTRON_VOLT_J
+    )
+
+    # A ~10 solar-mass thin disk peaks in the soft X-ray band.
+    assert 0.1 < peak_kt_kev < 3.0
 
 
 @pytest.mark.parametrize(
@@ -148,7 +193,6 @@ def test_ray_traced_kerr_thin_disk_spectrum_is_finite_positive() -> None:
         settings=KerrThinDiskSettings(
             radial_grid_count=32,
             disk_outer_radius_rg=50.0,
-            temperature_scale_kev=20.0,
         ),
     )
 
@@ -176,7 +220,6 @@ def test_ray_traced_kerr_thin_disk_spectrum_uses_limb_darkening() -> None:
         "settings": KerrThinDiskSettings(
             radial_grid_count=32,
             disk_outer_radius_rg=50.0,
-            temperature_scale_kev=20.0,
         ),
     }
 

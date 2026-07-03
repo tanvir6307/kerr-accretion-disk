@@ -38,7 +38,7 @@ def main() -> None:
     )
     multi_epoch = _read_csv(MULTI_EPOCH / "phase13p5_multi_epoch_summary.csv")
 
-    design = _write_design_table(confirmatory, replicates, resolution)
+    design = _write_design_table(confirmatory, replicates)
     validation_table = _write_validation_table(validation)
     confirmatory_table = _write_confirmatory_table(confirmatory)
     resolution_table = _write_resolution_table(resolution)
@@ -53,7 +53,6 @@ def main() -> None:
         design,
         validation_table,
         confirmatory_table,
-        resolution_table,
         transfer_table,
         multi_epoch_table,
     )
@@ -89,11 +88,12 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> Path:
 def _write_design_table(
     confirmatory: list[dict[str, str]],
     replicates: list[dict[str, str]],
-    resolution: list[dict[str, str]],
 ) -> Path:
     row = {
-        "config_version": "phase12_ray_traced_transfer_v4",
+        "config_version": "phase12_joint_emulator_v5",
         "model_backend": "ray_traced_transfer",
+        "fit_method": "joint_marginalized_emcee",
+        "fitted_parameters": "spin;f_col",
         "conditions": len(confirmatory),
         "base_replicates": len(replicates),
         "completed_base_replicates": sum(
@@ -103,14 +103,12 @@ def _write_design_table(
         "completed_condition_summaries": sum(
             row["status"] == "COMPLETED" for row in confirmatory
         ),
-        "resolution_rows": len(resolution),
-        "resolution_stable_rows": sum(row["stable"] == "True" for row in resolution),
-        "base_spin_grid_count": 81,
-        "high_resolution_spin_grid_count": 121,
+        "emulator_spin_nodes": 9,
+        "emulator_f_col_nodes": 5,
         "energy_bin_count": 24,
-        "ray_screen_size": "5x5",
+        "ray_screen_size": "24x24",
         "limb_darkening": "electron_scattering",
-        "config_file": str(CONFIG.relative_to(ROOT)),
+        "config_file": "configs/production/phase12_joint_v5.yaml",
     }
     return _write_csv(TABLES / "table1_phase12_design.csv", [row])
 
@@ -274,7 +272,6 @@ def _write_claim_audit(
     design: Path,
     validation_table: Path,
     confirmatory_table: Path,
-    resolution_table: Path,
     transfer_table: Path,
     multi_epoch_table: Path,
 ) -> None:
@@ -283,17 +280,26 @@ def _write_claim_audit(
             "claim_id": "C01",
             "manuscript_location": "Results; Figure 1; Table 1",
             "claim_text": (
-                "The corrected confirmatory campaign used the "
-                "phase12_ray_traced_transfer_v4 backend with 48 locked "
-                "conditions, 100 base replicates per condition, 81/121 spin-grid "
-                "resolution comparison, 5x5 transfer maps, and electron-scattering "
-                "limb darkening."
+                "The v5 confirmatory campaign used the corrected full-disk "
+                "ray_traced_transfer backend with physical absolute normalization "
+                "and a joint marginalized fit (emcee over spin and color "
+                "correction using a spectral emulator) across 48 locked "
+                "conditions, 30 replicates per condition, a 24x24 full-disk screen, "
+                "and electron-scattering limb darkening."
             ),
             "evidence_file": _rel(design),
             "figure_or_table": "Figure 1; Table 1",
-            "analysis_script": "scripts/make_tables.py; scripts/make_figures.py",
-            "assumptions": "Detector-independent Gaussian synthetic spectra.",
-            "limitations": "No detector response or observational calibration model.",
+            "analysis_script": (
+                "scripts/run_joint_campaign.py; scripts/make_tables.py"
+            ),
+            "assumptions": (
+                "Detector-independent Gaussian synthetic spectra; fiducial "
+                "ten-solar-mass black hole at 8 kpc."
+            ),
+            "limitations": (
+                "Reduced-resolution first v5 run (24x24 screen, 9x5 emulator "
+                "nodes, 30 replicates); no detector response or calibration model."
+            ),
             "status": "SUPPORTED",
         },
         {
@@ -311,14 +317,15 @@ def _write_claim_audit(
             "claim_id": "C03",
             "manuscript_location": "Results; Figure 8; Table 3",
             "claim_text": (
-                "The confirmatory grid shows large spin biases in several "
-                "misspecified conditions."
+                "Under color-correction marginalization the spin bias is modest "
+                "across the grid, but the inner-stress-misspecified conditions "
+                "remain biased and show elevated chi-square."
             ),
             "evidence_file": (
                 "data/processed/confirmatory/phase12_results_unblinded.csv"
             ),
-            "figure_or_table": "Figure 8; Table 3",
-            "analysis_script": "scripts/make_tables.py; scripts/make_figures.py",
+            "figure_or_table": "Figure 6; Figure 8; Table 3",
+            "analysis_script": "scripts/run_joint_campaign.py; scripts/make_figures.py",
             "assumptions": "Bias is posterior-mean spin minus injected spin.",
             "limitations": "Sensitivity-model result; no causal observational claim.",
             "status": "SUPPORTED",
@@ -332,26 +339,35 @@ def _write_claim_audit(
             ),
             "evidence_file": _rel(confirmatory_table),
             "figure_or_table": "Figure 9; Table 3",
-            "analysis_script": "scripts/make_tables.py; scripts/make_figures.py",
+            "analysis_script": "scripts/run_joint_campaign.py; scripts/make_figures.py",
             "assumptions": (
-                "Coverage estimated from 100 deterministic noise replicates."
+                "Coverage estimated from 30 deterministic noise replicates per "
+                "condition."
             ),
-            "limitations": "Not a full Bayesian calibration campaign for real data.",
+            "limitations": (
+                "Coverage is degraded both by genuine misspecification and by the "
+                "reduced emulator/screen resolution of this first v5 run; not a "
+                "full Bayesian calibration campaign for real data."
+            ),
             "status": "SUPPORTED",
         },
         {
             "claim_id": "C05",
             "manuscript_location": "Numerical Methods; Figure 11; Table 4",
             "claim_text": (
-                "All 48 confirmatory conditions passed the spin-grid stability "
-                "tolerance."
+                "Numerical convergence of the v5 spectra is set by the full-disk "
+                "screen resolution: relative-L1 spectrum differences versus a "
+                "112x112 reference are 1.9 percent (24x24), 0.73 percent (40x40), "
+                "and 0.38 percent (64x64), below the 3 percent noise level."
             ),
-            "evidence_file": _rel(resolution_table),
+            "evidence_file": "docs/validation.md",
             "figure_or_table": "Figure 11; Table 4",
-            "analysis_script": "scripts/make_tables.py; scripts/make_figures.py",
-            "assumptions": "Stability tolerance is abs mean-bias difference <= 0.01.",
+            "analysis_script": "scripts/run_joint_campaign.py",
+            "assumptions": "Convergence measured on the corrected full-disk screen.",
             "limitations": (
-                "This is spin-grid convergence, not full solver convergence."
+                "The joint emulator fit replaces the earlier spin-grid stability "
+                "rerun; the 24x24 campaign screen is the coarse-but-adequate end "
+                "of this convergence range."
             ),
             "status": "SUPPORTED",
         },
@@ -409,23 +425,23 @@ def _write_claim_audit(
             "claim_id": "C09",
             "manuscript_location": "Results; Figure 7",
             "claim_text": (
-                "The Phase 13.5 outputs provide joint two-epoch versus separate "
-                "single-epoch spin comparisons; width and bias changes are "
-                "condition-dependent."
+                "The v5 joint marginalized multi-epoch comparison shares spin and "
+                "color correction across two luminosity epochs; joint fitting "
+                "reduced the mean 68 percent spin-interval width in 12 of 24 "
+                "groups, and the change in spin bias is condition-dependent."
             ),
             "evidence_file": _rel(multi_epoch_table),
             "figure_or_table": "Figure 7; Table 6",
             "analysis_script": (
-                "scripts/run_multi_epoch.py; scripts/make_tables.py; "
-                "scripts/make_figures.py"
+                "scripts/run_joint_multi_epoch.py; scripts/make_figures.py"
             ),
             "assumptions": (
-                "Two luminosity epochs are paired at fixed spin, inclination, "
-                "f_col assumptions, and inner-stress setting."
+                "Two luminosity epochs are paired at fixed spin, inclination, and "
+                "inner-stress setting; the color correction is marginalized."
             ),
             "limitations": (
                 "Epoch luminosities are fixed metadata, not fitted nuisance "
-                "parameters; detector response is not included."
+                "parameters; reduced-resolution first v5 run; no detector response."
             ),
             "status": "SUPPORTED",
         },

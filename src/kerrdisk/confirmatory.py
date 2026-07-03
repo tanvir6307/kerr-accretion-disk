@@ -12,6 +12,7 @@ import numpy as np
 import yaml
 from numpy.typing import NDArray
 
+from kerrdisk.scales import observer_distance_rg
 from kerrdisk.screening import (
     ScreeningCondition,
     screening_proxy_photon_flux,
@@ -54,7 +55,8 @@ class ConfirmatoryConfig:
     model_backend: ModelBackend
     radial_grid_count: int
     disk_outer_radius_rg: float
-    temperature_scale_kev: float
+    mass_msun: float
+    distance_kpc: float
     ray_screen_alpha_min: float
     ray_screen_alpha_max: float
     ray_screen_beta_min: float
@@ -158,7 +160,7 @@ def default_confirmatory_config() -> ConfirmatoryConfig:
     """Return the default Phase 12 confirmatory configuration."""
 
     return ConfirmatoryConfig(
-        config_version="phase12_ray_traced_transfer_v4",
+        config_version="phase12_ray_traced_transfer_v5",
         locked_conditions_path=Path(
             "data/processed/screening/phase11_confirmatory_conditions.csv"
         ),
@@ -177,17 +179,22 @@ def default_confirmatory_config() -> ConfirmatoryConfig:
         model_backend="ray_traced_transfer",
         radial_grid_count=72,
         disk_outer_radius_rg=80.0,
-        temperature_scale_kev=20.0,
-        ray_screen_alpha_min=-8.0,
-        ray_screen_alpha_max=8.0,
-        ray_screen_beta_min=35.0,
-        ray_screen_beta_max=65.0,
-        ray_screen_size=5,
-        ray_observer_radius=100.0,
+        mass_msun=10.0,
+        distance_kpc=8.0,
+        # Corrected image plane: large observer radius keeps the flat-screen
+        # small-angle mapping valid, and a +/- 1.4 * disk_outer_radius screen
+        # captures the full disk image from the ISCO to the outer edge without
+        # boundary clipping. The 64x64 grid is convergence-justified.
+        ray_screen_alpha_min=-112.0,
+        ray_screen_alpha_max=112.0,
+        ray_screen_beta_min=-112.0,
+        ray_screen_beta_max=112.0,
+        ray_screen_size=64,
+        ray_observer_radius=1_000.0,
         ray_disk_outer_radius=80.0,
         ray_step_size=0.1,
-        ray_max_steps=3_000,
-        ray_escape_radius=160.0,
+        ray_max_steps=6_000,
+        ray_escape_radius=2_000.0,
         limb_darkening="electron_scattering",
     )
 
@@ -237,9 +244,8 @@ def confirmatory_config_from_mapping(raw: Mapping[str, Any]) -> ConfirmatoryConf
         disk_outer_radius_rg=float(
             raw.get("disk_outer_radius_rg", default.disk_outer_radius_rg)
         ),
-        temperature_scale_kev=float(
-            raw.get("temperature_scale_kev", default.temperature_scale_kev)
-        ),
+        mass_msun=float(raw.get("mass_msun", default.mass_msun)),
+        distance_kpc=float(raw.get("distance_kpc", default.distance_kpc)),
         ray_screen_alpha_min=float(
             raw.get("ray_screen_alpha_min", default.ray_screen_alpha_min)
         ),
@@ -305,8 +311,11 @@ def validate_confirmatory_config(config: ConfirmatoryConfig) -> None:
     if config.disk_outer_radius_rg <= 0.0:
         msg = "disk_outer_radius_rg must be positive"
         raise ValueError(msg)
-    if config.temperature_scale_kev <= 0.0:
-        msg = "temperature_scale_kev must be positive"
+    if config.mass_msun <= 0.0:
+        msg = "mass_msun must be positive"
+        raise ValueError(msg)
+    if config.distance_kpc <= 0.0:
+        msg = "distance_kpc must be positive"
         raise ValueError(msg)
     if config.ray_screen_alpha_max <= config.ray_screen_alpha_min:
         msg = "ray screen alpha bounds must be ordered"
@@ -618,11 +627,7 @@ def _energy_flux_for_spin(
             f_col=model_condition.f_col_true,
             delta_eta=model_condition.inner_stress_delta_eta,
             energy_bins=bins,
-            settings=KerrThinDiskSettings(
-                radial_grid_count=config.radial_grid_count,
-                disk_outer_radius_rg=config.disk_outer_radius_rg,
-                temperature_scale_kev=config.temperature_scale_kev,
-            ),
+            settings=_thin_disk_settings(config),
             limb_darkening=config.limb_darkening,
         )
     return kerr_thin_disk_energy_flux(
@@ -632,11 +637,16 @@ def _energy_flux_for_spin(
         f_col=model_condition.f_col_true,
         delta_eta=model_condition.inner_stress_delta_eta,
         energy_bins=bins,
-        settings=KerrThinDiskSettings(
-            radial_grid_count=config.radial_grid_count,
-            disk_outer_radius_rg=config.disk_outer_radius_rg,
-            temperature_scale_kev=config.temperature_scale_kev,
-        ),
+        settings=_thin_disk_settings(config),
+    )
+
+
+def _thin_disk_settings(config: ConfirmatoryConfig) -> KerrThinDiskSettings:
+    return KerrThinDiskSettings(
+        radial_grid_count=config.radial_grid_count,
+        disk_outer_radius_rg=config.disk_outer_radius_rg,
+        mass_msun=config.mass_msun,
+        distance_kpc=config.distance_kpc,
     )
 
 
@@ -668,7 +678,7 @@ def _transfer_map_for(
         observer_radius=config.ray_observer_radius,
         observer_theta=radians(inclination_deg),
         disk_outer_radius=config.ray_disk_outer_radius,
-        observer_distance=config.ray_observer_radius,
+        observer_distance=observer_distance_rg(config.distance_kpc, config.mass_msun),
         step_size=config.ray_step_size,
         max_steps=config.ray_max_steps,
         escape_radius=config.ray_escape_radius,

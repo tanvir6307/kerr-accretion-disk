@@ -1,4 +1,4 @@
-config_version: phase12_ray_traced_transfer_v5
+config_version: phase12_ray_traced_transfer_v5_joint
 locked_conditions_path: data/processed/screening/phase11_confirmatory_conditions.csv
 frozen_protocol_path: data/processed/screening/phase11_confirmatory_protocol.md
 master_seed: 20260620
@@ -13,22 +13,18 @@ bias_stability_abs: 0.01
 model_backend: ray_traced_transfer
 radial_grid_count: 72
 disk_outer_radius_rg: 80.0
-# Physical system that sets the absolute spectral normalization: the mass fixes
-# the gravitational radius and (with the Eddington ratio and efficiency) the
-# accretion rate and effective-temperature profile; the distance sets the
-# observed flux level.
 mass_msun: 10.0
 distance_kpc: 8.0
-# Corrected image plane: a large observer radius keeps the flat-screen
-# small-angle mapping valid, and the screen spans +/- 1.4 * disk_outer_radius
-# so the full disk image from the ISCO to the outer edge is captured without
-# boundary clipping. The 64x64 grid is convergence-justified (< 0.5 percent
-# relative-L1 versus a 112x112 reference; see docs/validation.md).
+# Same corrected v5 image plane as phase12_confirmatory.yaml, but with a 24x24
+# screen for the joint-emulator campaign. The screen is convergence-justified
+# (~1.9 percent relative-L1 versus the 112x112 reference; see docs/validation.md),
+# comfortably below the 3 percent Gaussian noise, and keeps the near-extremal
+# emulator transfer-map builds tractable.
 ray_screen_alpha_min: -112.0
 ray_screen_alpha_max: 112.0
 ray_screen_beta_min: -112.0
 ray_screen_beta_max: 112.0
-ray_screen_size: 64
+ray_screen_size: 24
 ray_observer_radius: 1000.0
 ray_disk_outer_radius: 80.0
 ray_step_size: 0.1

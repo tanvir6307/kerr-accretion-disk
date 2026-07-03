@@ -63,7 +63,6 @@ def run_transfer_convergence(
     settings = KerrThinDiskSettings(
         radial_grid_count=72,
         disk_outer_radius_rg=80.0,
-        temperature_scale_kev=20.0,
     )
     rows: list[TransferConvergenceRow] = []
     for a_star, inclination_deg in cases:

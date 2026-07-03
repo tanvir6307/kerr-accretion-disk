@@ -8,11 +8,14 @@ The Kerr metric, horizon radius, equatorial ISCO radius, circular-orbit angular
 velocity, specific energy, specific angular momentum, and zero-torque efficiency
 proxy are evaluated directly in double-precision Python/NumPy arithmetic.
 
-Metric derivatives are currently centered finite differences of the registered
-covariant metric. This is sufficient for Phase 2 validation and keeps derivative
-formulae tied to the metric implementation. Later geodesic phases may replace or
-augment these with analytic derivatives after those expressions are independently
-registered and tested.
+Metric derivatives are available in two forms. `metric_derivatives` computes
+centered finite differences of the covariant metric and is retained as an
+independent oracle. `covariant_metric_derivatives` and
+`contravariant_metric_derivatives` evaluate closed-form analytic derivatives of
+the registered metric components. The analytic and finite-difference forms are
+cross-checked, and the two analytic tensors are verified against the exact
+identity `d(g^-1) = -g^-1 (dg) g^-1` across the valid domain. The geodesic force
+term uses the analytic contravariant derivatives.
 
 ## Phase 3
 
@@ -49,8 +52,24 @@ occurs.
 The reference ray tracer evolves Kerr null rays with Hamiltonian equations in
 Boyer-Lindquist coordinates. The state vector is
 `(t, r, theta, phi, p_t, p_r, p_theta, p_phi)`. Derivatives of the
-contravariant metric are centered finite differences. The scalar integrator is
-explicit RK4 with fixed step size and event checks after each accepted step.
+contravariant metric in the force term are analytic (Phase 2). Two integrators
+are provided:
+
+- `trace_ray` is the explicit fixed-step RK4 reference with event checks after
+  each accepted step. It is retained for regression and as a baseline.
+- `trace_ray_adaptive` is an embedded Dormand-Prince RK45 integrator with a
+  PI-style step-size controller targeting a relative/absolute error tolerance
+  (`rtol`/`atol`). The disk-crossing event is refined by bisection on the
+  sub-step rather than by linear interpolation, so the recorded emission radius
+  and near-zero event residual are controlled to `event_tol`. `rtol` provides a
+  single-parameter convergence knob for tolerance studies.
+
+At `rtol = 1e-9` the adaptive tracer reproduces the fixed-step disk-hit radius
+to better than `1e-4 r_g` while using far fewer right-hand-side evaluations, and
+it conserves energy, axial angular momentum, and the Carter constant to the
+declared invariant tolerances. Rays approaching the polar axis are rejected
+explicitly (`geodesics._AXIS_BUFFER`) because the Boyer-Lindquist contravariant
+metric diverges there.
 
 The current event layer records exactly one terminal outcome:
 
@@ -192,6 +211,44 @@ Phase 12 backend. It still uses the scalar reference ray tracer. Returning
 radiation and photon-capture outcomes are diagnosed in Phase 12.5 but are not
 iteratively reprocessed into the confirmatory likelihood.
 
+### Corrected image plane (`phase12_ray_traced_transfer_v5`)
+
+The v4 configuration traced a 5x5 (25-ray) screen over a narrow, hand-tuned,
+off-center window (`alpha in [-8, 8]`, `beta in [35, 65]`) with the observer at
+`r = 100`. This window sampled only emission radii near `37-53 r_g` and missed
+the hot inner disk that carries most of the spin information, and at `r = 100`
+the flat-screen small-angle mapping is inaccurate for wide-angle rays. The v5
+configuration corrects both defects:
+
+- The observer is placed at `r = 1000` so the flat-screen small-angle mapping
+  stays accurate over the whole image.
+- The screen spans `+/- 1.4 * disk_outer_radius` symmetrically
+  (`full_disk_screen_axes`), capturing the full disk image from the ISCO to the
+  outer edge with no boundary clipping. For `a = 0.5`, `i = 40 deg` the corrected
+  screen samples emission radii from `~4.3 r_g` (the ISCO) to `~80 r_g`.
+- The image is traced with the adaptive Dormand-Prince integrator at a
+  convergence-justified `64x64` resolution. A resolution study on the corrected
+  full-disk screen gives relative-L1 spectrum differences versus a `112x112`
+  reference of `1.9%` (24x24), `0.73%` (40x40), `0.38%` (64x64), and `0.12%`
+  (88x88).
+
+The v5 spectrum is also absolutely normalized to a physical system rather than
+scaled by an arbitrary temperature parameter. The mass (`mass_msun`) sets the
+gravitational radius and, with the Eddington ratio and radiative efficiency, the
+accretion rate; the Page-Thorne SI flux sets the effective-temperature profile
+in kelvin; and the distance (`distance_kpc`) sets the observed flux level. The
+transfer map is built with `observer_distance` equal to the astronomical
+distance in gravitational radii so its solid angle is the physical observer
+solid angle, giving the correct `r_g^2` and `D^-2` scaling. For the fiducial
+ten-solar-mass, 8 kpc system the peak effective temperature is `~0.5 keV`, in
+the soft X-ray band. Because the fit uses noise anchored to the true spectrum,
+the absolute normalization (which depends on mass and spin through the ISCO) now
+carries spin information in addition to the spectral shape.
+
+The v4 confirmatory artifacts under `data/processed/confirmatory` and the paper
+figures/tables derived from them predate this correction and must be regenerated
+with the v5 configuration before they are used for any scientific claim.
+
 ## Phase 12.5
 
 The transfer-validation command runs three checks. The screen-convergence
@@ -238,3 +295,53 @@ from archived processed outputs, then writes a release run manifest and SHA-256
 checksum CSV under `data/processed/release`. `--mode full` is wired to rerun the
 heavy validation, confirmatory, transfer-validation, external-backend audit,
 and multi-epoch commands before regenerating paper artifacts.
+
+## Joint Multi-Parameter Inference
+
+The earlier campaign fitted only spin on a one-dimensional grid while holding
+inclination, accretion rate, and color correction fixed at the model values.
+That scan cannot represent parameter degeneracies or a marginalized
+uncertainty. `src/kerrdisk/joint_inference.py` adds a joint fit over several
+parameters (for example spin, Eddington ratio, color correction, and
+inclination) using the affine-invariant ensemble sampler `emcee`. The spin
+posterior is obtained by marginalizing the nuisance parameters. `make_spectrum_posterior`
+builds a Gaussian-spectrum posterior over a forward model with fixed data
+variance; `run_emcee_sampler` runs a seeded, reproducible ensemble and returns
+chains in the shared `ChainResult` format so the existing R-hat and
+effective-sample-size diagnostics apply.
+
+Freeing the color correction inflates the marginal spin interval relative to a
+fixed-color fit, which is the spin/color-correction degeneracy the study is
+designed to expose.
+
+### Fast forward model (spectral grid emulator)
+
+A full ensemble fit needs thousands of forward evaluations, which is infeasible
+if each evaluation ray-traces a new transfer map. The transfer map depends only
+on spin and inclination, while the Eddington ratio and color correction are
+cheap transforms of the effective-temperature profile and local emission at a
+fixed geometry. `src/kerrdisk/emulator.py` exploits this: `build_spectral_grid`
+evaluates a spectral backend once on a regular parameter grid (tracing the
+costly transfer maps only at the nodes), and `SpectralGrid` interpolates
+multilinearly at every posterior evaluation. This is the standard
+precomputed-table strategy used by continuum-fitting spin codes.
+
+### Simulation-based calibration on the actual model
+
+`run_spectrum_sbc` performs simulation-based calibration on the actual spectral
+forward model rather than a one-dimensional analytic surrogate. For each
+simulation it draws a truth from the prior, generates a noisy spectrum, samples
+the joint posterior with ensemble walkers dispersed across the prior, and
+records the rank of the true value within its marginal posterior. The aggregate
+rank histogram and 68 / 95 percent interval coverage reuse the Phase 10 SBC
+summary. Rigorous calibration with many simulations and a production-resolution
+grid is an offline job; the packaged tests are fast smoke checks with loose
+calibration bands.
+
+### Migration status
+
+The joint fit, spectral-grid emulator, and model-based SBC are validated
+capabilities. Migrating the confirmatory and multi-epoch campaigns from the
+one-dimensional spin scan to the joint fit over a precomputed emulator (built
+from the corrected v5 ray-traced backend) is the next production step and, like
+the v5 campaign regeneration, is a compute job rather than a code change.

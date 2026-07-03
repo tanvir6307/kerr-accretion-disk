@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from kerrdisk.isco import isco_radius
 from kerrdisk.metric import covariant_metric
 from kerrdisk.raytrace import static_observer_tetrad
 from kerrdisk.spectrum import (
@@ -13,6 +14,7 @@ from kerrdisk.spectrum import (
     build_transfer_map,
     circular_emitter_four_velocity,
     emission_angle_cosine,
+    full_disk_screen_axes,
     load_transfer_map,
     measured_frequency,
     observed_flux_density,
@@ -167,6 +169,43 @@ def test_build_transfer_map_records_non_hit_outcomes() -> None:
 
     assert transfer_map.alpha.size == 0
     assert transfer_map.outcome_counts["DISK_HIT"] == 0
+
+
+def test_full_disk_screen_captures_inner_and_outer_disk() -> None:
+    from math import radians
+
+    disk_outer = 40.0
+    alpha, beta = full_disk_screen_axes(disk_outer, 14)
+    transfer_map = build_transfer_map(
+        0.6,
+        alpha,
+        beta,
+        observer_radius=600.0,
+        observer_theta=radians(45.0),
+        disk_outer_radius=disk_outer,
+        observer_distance=600.0,
+        max_steps=6_000,
+        escape_radius=1_200.0,
+    )
+
+    assert transfer_map.emission_radius.size > 0
+    # The corrected large-observer full-disk screen samples the hot inner disk
+    # near the ISCO (unlike a narrow off-center window) out to the outer edge.
+    assert transfer_map.emission_radius.min() < 1.5 * isco_radius(0.6)
+    assert transfer_map.emission_radius.max() > 0.9 * disk_outer
+    # No disk hit sits on the outermost screen ring, so the image is not clipped.
+    half_width = 1.4 * disk_outer
+    assert np.max(np.abs(transfer_map.alpha)) < half_width
+    assert np.max(np.abs(transfer_map.beta)) < half_width
+
+
+def test_full_disk_screen_axes_reject_invalid_inputs() -> None:
+    with pytest.raises(ValueError, match="disk_outer_radius"):
+        full_disk_screen_axes(0.0, 8)
+    with pytest.raises(ValueError, match="screen_size"):
+        full_disk_screen_axes(40.0, 1)
+    with pytest.raises(ValueError, match="margin"):
+        full_disk_screen_axes(40.0, 8, margin=1.0)
 
 
 def test_build_transfer_map_rejects_bad_screen_grid() -> None:

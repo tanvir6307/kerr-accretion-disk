@@ -2,11 +2,11 @@
 
 ## Figure 1: `figure1_model_schematic.png`
 
-Model schematic for the Phase 12 v4 workflow. Boxes show the fixed analysis sequence from locked conditions to bias, coverage, and convergence summaries; no numerical normalization is implied.
+Model schematic for the corrected v5 workflow. Boxes show the analysis sequence from locked conditions through the physically normalized, full-disk ray-traced spectra to the joint marginalized spin fit and the bias, coverage, and convergence summaries.
 
 ## Figure 2: `figure2_validation_residuals.png`
 
-Independent validation residuals from data/processed/validation_summary.csv. Each bar is normalized by its declared tolerance; varied quantities include ISCO radius, efficiency, ray invariants, Page-Thorne flux, and a constant-intensity transfer-spectrum check.
+Independent validation margins from data/processed/validation_summary.csv. Each bar is the number of orders of magnitude the residual sits below its declared tolerance (capped at 15 for residuals at machine precision); all checks pass. Varied quantities include ISCO radius, efficiency, ray invariants, Page-Thorne flux, and a constant-intensity transfer-spectrum check.
 
 ## Figure 3: `figure3_disk_flux_profiles.png`
 
@@ -14,15 +14,15 @@ Disk flux profiles for a*=(-0.5, 0, 0.5, 0.9), normalized to dimensionless one-f
 
 ## Figure 4: `figure4_transfer_images.png`
 
-Ray-traced 5x5 transfer-map image-plane samples for two benchmark spin/inclination pairs. Color is the transfer-map redshift g for disk-hit rays; alpha and beta are local observer-screen coordinates.
+Ray-traced 64x64 full-disk transfer-map image-plane samples for two benchmark spin/inclination pairs. Color is the transfer-map redshift g for disk-hit rays; alpha and beta are local observer-screen coordinates in gravitational radii.
 
 ## Figure 5: `figure5_ray_traced_spectra.png`
 
-Ray-traced detector-independent spectra for varied spin and stress at inclination 40 deg, eddington_ratio=0.1, f_col=1.7, and the Phase 12 v4 5x5 transfer-map normalization. Flux normalization is arbitrary and consistent across curves.
+Ray-traced spectra for varied spin and stress at inclination 40 deg, eddington_ratio=0.1, f_col=1.7, for the fiducial 10 solar-mass black hole at 8 kpc. Uses the corrected v5 full-disk 64x64 transfer map with physical absolute normalization; bin energy flux is in erg/s/cm^2.
 
 ## Figure 6: `figure6_bias_width_proxy.png`
 
-Condition-level bias versus mean 68% interval width from the Phase 12 v4 confirmatory table. Color is log10(mean chi2_per_dof). This is an identifiability proxy, not a multi-parameter posterior degeneracy plot.
+Condition-level absolute spin bias versus mean 68% interval width from the v5 joint marginalized-fit confirmatory table (color correction marginalized). Color is log10(mean chi2_per_dof); conditions with elevated chi2 are the inner-stress-misspecified cases that remain biased with narrow intervals.
 
 ## Figure 7: `figure7_multi_epoch_status.png`
 

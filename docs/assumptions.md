@@ -28,12 +28,35 @@ This document records project assumptions frozen after the provisional Phase 0 a
 - The scientific target is a controlled misspecification study, not a claim that any particular observed black-hole spin is wrong.
 - Same-model injection recovery and coverage calibration must pass before misspecified fits are interpreted.
 - Multi-epoch fitting should share black-hole spin, mass, distance, and inclination while allowing epoch-level accretion rate and optionally epoch-level or luminosity-dependent `f_col`.
+- Spin uncertainty must be obtained by marginalizing the nuisance parameters
+  (at least accretion rate and color correction, and where relevant
+  inclination), not by a one-dimensional spin scan at fixed nuisance values. The
+  joint ensemble fit in `src/kerrdisk/joint_inference.py` provides this;
+  same-model simulation-based calibration must pass on the actual spectral
+  forward model before marginalized coverage is interpreted.
 - Priors, estimands, coverage definitions, and failure accounting must be frozen before confirmatory simulations.
 - Phase 10 priors are frozen in `paper/tables/priors.csv` for development and
   validation. Any Phase 11 campaign prior change requires updating that table
   and documenting why the previous frozen table was superseded.
 - Phase 11 screening artifacts are workflow-screening outputs. They may guide
   Phase 12 refinement selection, but they are not final astrophysical evidence.
+
+## Physical Normalization Assumptions
+
+- The thin-disk spectrum is absolutely normalized to a physical system
+  (`mass_msun`, `distance_kpc`, inclination, Eddington ratio) rather than scaled
+  by an arbitrary temperature parameter. The fiducial system is a
+  ten-solar-mass black hole at 8 kpc.
+- The Eddington ratio is the bolometric `L / L_Edd`. The accretion rate is
+  derived as `Mdot = ell L_Edd / (eta c^2)` with the spin-dependent radiative
+  efficiency, so higher-efficiency high-spin disks require a smaller accretion
+  rate at fixed `L / L_Edd`.
+- The absolute normalization depends on mass and spin (through the ISCO), so it
+  contributes spin information beyond the spectral shape. This is a deliberate
+  strengthening of the misspecification experiment over the earlier shape-only
+  spectrum.
+- The physical system does not yet fit mass or distance as free parameters;
+  they are fixed metadata of the synthetic experiment.
 
 ## Color-Correction Assumptions
 

@@ -6,10 +6,21 @@ from math import cos, isfinite, pi, sin
 import numpy as np
 from numpy.typing import NDArray
 
-from kerrdisk.metric import _validate_spin, contravariant_metric, horizon_radius
+from kerrdisk.metric import (
+    _validate_spin,
+    contravariant_metric,
+    contravariant_metric_derivatives,
+    horizon_radius,
+)
 
 type StateVector = NDArray[np.float64]
 type Matrix4 = NDArray[np.float64]
+
+# Rays approaching the polar axis enter the Boyer-Lindquist coordinate
+# singularity where the contravariant metric diverges as 1/sin^2(theta).
+# Reject them explicitly so the integrator reports NUMERICAL_FAILURE rather
+# than propagating an unreliable right-hand side.
+_AXIS_BUFFER = 1.0e-6
 
 
 @dataclass(frozen=True)
@@ -35,25 +46,11 @@ def _contravariant_metric_derivatives(
     a_star: float,
     radius: float,
     theta: float,
-    *,
-    step_radius: float = 1.0e-5,
-    step_theta: float = 1.0e-5,
 ) -> tuple[Matrix4, Matrix4]:
-    if radius - step_radius <= horizon_radius(a_star):
-        msg = "radius derivative stencil must remain outside the horizon"
-        raise ValueError(msg)
-    if theta - step_theta <= 0.0 or theta + step_theta >= pi:
-        msg = "theta derivative stencil must remain away from the coordinate axis"
-        raise ValueError(msg)
-    d_radius = (
-        contravariant_metric(a_star, radius + step_radius, theta)
-        - contravariant_metric(a_star, radius - step_radius, theta)
-    ) / (2.0 * step_radius)
-    d_theta = (
-        contravariant_metric(a_star, radius, theta + step_theta)
-        - contravariant_metric(a_star, radius, theta - step_theta)
-    ) / (2.0 * step_theta)
-    return d_radius, d_theta
+    """Return analytic radial and polar contravariant metric derivatives."""
+
+    tensor = contravariant_metric_derivatives(a_star, radius, theta)
+    return tensor[1], tensor[2]
 
 
 def hamiltonian(a_star: float, state: StateVector) -> float:
@@ -114,8 +111,8 @@ def geodesic_rhs(a_star: float, state: StateVector) -> StateVector:
     if not isfinite(radius) or radius <= horizon_radius(a_star):
         msg = "radius must remain outside the outer horizon"
         raise ValueError(msg)
-    if not isfinite(theta) or theta <= 0.0 or theta >= pi:
-        msg = "theta must remain inside the Boyer-Lindquist coordinate range"
+    if not isfinite(theta) or theta <= _AXIS_BUFFER or theta >= pi - _AXIS_BUFFER:
+        msg = "theta must remain away from the Boyer-Lindquist coordinate axis"
         raise ValueError(msg)
 
     covector = state[4:8]
@@ -144,3 +141,86 @@ def rk4_step(a_star: float, state: StateVector, step_size: float) -> StateVector
         msg = "RK4 step produced nonfinite state values"
         raise FloatingPointError(msg)
     return next_state
+
+
+# Dormand-Prince RK45 Butcher tableau. The geodesic system is autonomous, so
+# only the stage combination coefficients are required. The fifth-order weights
+# are the FSAL seventh row; the fourth-order weights provide the embedded error
+# estimate for adaptive step control.
+_DP_A21 = 1.0 / 5.0
+_DP_A31, _DP_A32 = 3.0 / 40.0, 9.0 / 40.0
+_DP_A41, _DP_A42, _DP_A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
+_DP_A51, _DP_A52, _DP_A53, _DP_A54 = (
+    19372.0 / 6561.0,
+    -25360.0 / 2187.0,
+    64448.0 / 6561.0,
+    -212.0 / 729.0,
+)
+_DP_A61, _DP_A62, _DP_A63, _DP_A64, _DP_A65 = (
+    9017.0 / 3168.0,
+    -355.0 / 33.0,
+    46732.0 / 5247.0,
+    49.0 / 176.0,
+    -5103.0 / 18656.0,
+)
+_DP_B1, _DP_B3, _DP_B4, _DP_B5, _DP_B6 = (
+    35.0 / 384.0,
+    500.0 / 1113.0,
+    125.0 / 192.0,
+    -2187.0 / 6784.0,
+    11.0 / 84.0,
+)
+_DP_E1 = _DP_B1 - 5179.0 / 57600.0
+_DP_E3 = _DP_B3 - 7571.0 / 16695.0
+_DP_E4 = _DP_B4 - 393.0 / 640.0
+_DP_E5 = _DP_B5 - (-92097.0 / 339200.0)
+_DP_E6 = _DP_B6 - 187.0 / 2100.0
+_DP_E7 = -1.0 / 40.0
+
+
+def dormand_prince_step(
+    a_star: float,
+    state: StateVector,
+    step_size: float,
+) -> tuple[StateVector, StateVector]:
+    """Advance one embedded Dormand-Prince RK45 step.
+
+    Returns the fifth-order solution and the embedded fourth/fifth-order error
+    estimate used for adaptive step-size control.
+    """
+
+    if not isfinite(step_size) or step_size <= 0.0:
+        msg = "step_size must be finite and positive"
+        raise ValueError(msg)
+    k1 = geodesic_rhs(a_star, state)
+    k2 = geodesic_rhs(a_star, state + step_size * (_DP_A21 * k1))
+    k3 = geodesic_rhs(a_star, state + step_size * (_DP_A31 * k1 + _DP_A32 * k2))
+    k4 = geodesic_rhs(
+        a_star, state + step_size * (_DP_A41 * k1 + _DP_A42 * k2 + _DP_A43 * k3)
+    )
+    k5 = geodesic_rhs(
+        a_star,
+        state + step_size * (_DP_A51 * k1 + _DP_A52 * k2 + _DP_A53 * k3 + _DP_A54 * k4),
+    )
+    k6 = geodesic_rhs(
+        a_star,
+        state
+        + step_size
+        * (_DP_A61 * k1 + _DP_A62 * k2 + _DP_A63 * k3 + _DP_A64 * k4 + _DP_A65 * k5),
+    )
+    next_state = state + step_size * (
+        _DP_B1 * k1 + _DP_B3 * k3 + _DP_B4 * k4 + _DP_B5 * k5 + _DP_B6 * k6
+    )
+    k7 = geodesic_rhs(a_star, next_state)
+    error = step_size * (
+        _DP_E1 * k1
+        + _DP_E3 * k3
+        + _DP_E4 * k4
+        + _DP_E5 * k5
+        + _DP_E6 * k6
+        + _DP_E7 * k7
+    )
+    if not np.all(np.isfinite(next_state)):
+        msg = "Dormand-Prince step produced nonfinite state values"
+        raise FloatingPointError(msg)
+    return next_state, error

@@ -75,6 +75,10 @@ warn_unreachable = true
 pretty = true
 files = ["src/kerrdisk"]
 
+[[tool.mypy.overrides]]
+module = ["emcee.*", "scipy.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

@@ -458,3 +458,79 @@ Current limitations:
   records 41 machine-verified entries and 16 entries requiring manual review.
 - The archive reproduction manifest records a resolved `git_commit` and an
   empty warnings list for the latest local archive run.
+
+## Independent Analytic Spectrum Cross-Validation
+
+The Schwarzschild face-on disk spectrum has a closed form. A circular-orbit
+emitter observed along the polar axis has no line-of-sight Doppler shift, so its
+redshift factor is `g(r) = 1 / u^t = sqrt(1 - 3 / r)`, and the observed flux is
+a redshifted, area-weighted sum of diluted blackbodies with no light bending.
+`src/kerrdisk/analytic_validation.py` implements this from first principles,
+independently of the production ray tracer and transfer-map assembly, and
+compares it against the ray-traced backend near face-on inclination.
+
+Outcome (production settings, `a = 0`, `i = 3 deg`, 64-equivalent full-disk
+screen at `48x48`, observer at `1000 r_g`, fiducial 10 solar-mass, 8 kpc
+system):
+
+- 940 disk hits.
+- Relative-L1 spectrum difference versus the analytic benchmark: `0.0409`.
+- Total-flux ratio (ray-traced / analytic): `1.041`.
+- Status: `PASS` at the declared `0.10` tolerance.
+- Artifact: `data/processed/validation/face_on_analytic_cross_validation.csv`.
+
+This validates the ray tracer's redshift factor, solid-angle normalization, and
+flux integration against a fully independent analytic calculation. The small
+residual is consistent with the finite `3 deg` inclination and light bending
+that the analytic face-on limit omits.
+
+### External ray-tracer status
+
+External agreement against a third-party ray tracer (`GYOTO`, `RAPTOR`,
+`grtrans`, `kgeo`) remains separate from the analytic cross-validation above.
+`kgeo` is distributed only from its source repository and is not installable
+from the package index; installing and running it requires an explicit,
+user-approved dependency step. Until such a backend is installed and adapted
+with documented screen-coordinate, redshift, disk-hit, and emission-angle
+conventions, the external-code comparison stays `SKIPPED` while the independent
+analytic cross-validation above is `PASS`.
+
+## Phase 12 / 13.5 v5 Joint Marginalized Campaign
+
+The confirmatory and multi-epoch campaigns were rerun with the corrected v5
+pipeline and a joint marginalized fit that replaces the one-dimensional
+spin-grid scan. For each condition a (spin, color-correction) spectral emulator
+is built once from full-disk ray-traced transfer maps, and every replicate is
+fitted with the affine-invariant ensemble sampler; the spin posterior is the
+color-marginalized marginal.
+
+Run settings (reduced-resolution first v5 run):
+
+- 48 locked conditions, 30 replicates per condition.
+- 24x24 full-disk screen (relative-L1 ~1.9 percent versus the 112x112 reference,
+  below the 3 percent Gaussian noise), observer at `1000 r_g`, fiducial
+  ten-solar-mass black hole at 8 kpc.
+- Emulator nodes: 9 spin, 5 color-correction; emcee with 16 walkers, 350 draws,
+  200 burn-in.
+- Runners: `scripts/run_joint_campaign.py`, `scripts/run_joint_multi_epoch.py`;
+  config `configs/production/phase12_joint_v5.yaml`.
+
+Outcome:
+
+- Confirmatory: 48/48 conditions completed. Under color-correction
+  marginalization the condition-mean spin bias is modest (range about `-0.26`
+  to `+0.41`, mean `~0.04`), far smaller than the earlier one-dimensional-fit
+  values that reached `~1.1`. The inner-stress-misspecified conditions
+  (`Delta_eta = 0.02`) remain biased with elevated `chi2/dof` (about `6-7`),
+  while zero-stress conditions with only color-correction offset recover spin
+  with wider intervals and better coverage.
+- Multi-epoch: 24/24 groups completed; joint two-epoch fitting reduced the mean
+  68 percent spin-interval width in 12 of 24 groups, and the change in spin bias
+  is condition-dependent.
+
+Limitations:
+
+- This is a reduced-resolution first v5 run. Same-model coverage is degraded
+  both by genuine misspecification and by the coarse emulator/screen resolution;
+  the full-resolution campaign (64x64 screen, denser emulator nodes, and more
+  replicates) is a separate compute job.

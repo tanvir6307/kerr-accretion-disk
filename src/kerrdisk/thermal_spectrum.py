@@ -1,4 +1,11 @@
-"""Kerr thin-disk thermal spectra for confirmatory campaigns."""
+"""Physically normalized Kerr thin-disk thermal spectra.
+
+The spectrum is anchored to a physical system: a black-hole mass sets the
+gravitational radius and the accretion rate through the Eddington ratio, the
+Page-Thorne surface flux sets the effective-temperature profile in kelvin, and
+the distance sets the observed normalization. The observable is the binned
+energy flux in ``erg s^-1 cm^-2`` per bin.
+"""
 
 from dataclasses import dataclass
 from math import cos, isclose, isfinite, pi, radians
@@ -7,26 +14,47 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from kerrdisk.atmosphere import (
+    diluted_blackbody_nu,
+    effective_temperature_from_flux,
+)
+from kerrdisk.circular_orbits import nt_efficiency
+from kerrdisk.constants import (
+    KILO_ELECTRON_VOLT_J,
+    PLANCK_CONSTANT_J_S,
+    WATT_PER_M2_TO_ERG_PER_S_CM2,
+)
 from kerrdisk.disk_flux import (
+    flux_si_from_dimensionless,
     page_thorne_flux_profile,
     stressed_page_thorne_flux_profile,
 )
 from kerrdisk.isco import isco_radius
 from kerrdisk.metric import _validate_spin
+from kerrdisk.scales import (
+    accretion_rate_kg_s,
+    black_hole_mass_kg,
+    distance_m,
+    gravitational_radius_m,
+)
 from kerrdisk.spectrum import TransferMap
 from kerrdisk.synthetic import EnergyBins
 
 type FloatArray = NDArray[np.float64]
 type LimbDarkeningMode = Literal["isotropic", "electron_scattering"]
 
+FIDUCIAL_MASS_MSUN = 10.0
+FIDUCIAL_DISTANCE_KPC = 8.0
+
 
 @dataclass(frozen=True)
 class KerrThinDiskSettings:
-    """Numerical settings for the Phase 12 Kerr thin-disk spectrum backend."""
+    """Physical system and numerical settings for the thin-disk spectrum."""
 
     radial_grid_count: int = 180
     disk_outer_radius_rg: float = 1_000.0
-    temperature_scale_kev: float = 20.0
+    mass_msun: float = FIDUCIAL_MASS_MSUN
+    distance_kpc: float = FIDUCIAL_DISTANCE_KPC
 
 
 DEFAULT_KERR_THIN_DISK_SETTINGS = KerrThinDiskSettings()
@@ -42,36 +70,49 @@ def kerr_thin_disk_energy_flux(
     energy_bins: EnergyBins,
     settings: KerrThinDiskSettings = DEFAULT_KERR_THIN_DISK_SETTINGS,
 ) -> FloatArray:
-    """Return detector-independent bin energy flux for a Kerr thin disk."""
+    """Return binned energy flux for an axisymmetric no-transfer thin disk.
 
-    _validate_inputs(
+    This backend applies inclination projection and the physical distance
+    normalization but no gravitational redshift or lensing. It is a cheap
+    comparison model, not the production transfer calculation.
+    """
+
+    _validate_system(
         a_star=a_star,
-        inclination_deg=inclination_deg,
         eddington_ratio=eddington_ratio,
         f_col=f_col,
         delta_eta=delta_eta,
         settings=settings,
     )
-    inner_radius = isco_radius(a_star)
-    if settings.disk_outer_radius_rg <= inner_radius:
-        msg = "disk_outer_radius_rg must exceed the ISCO"
+    if not isfinite(inclination_deg) or not 0.0 <= inclination_deg < 90.0:
+        msg = "inclination_deg must be finite and satisfy 0 <= inclination < 90"
         raise ValueError(msg)
-    radii, flux = _disk_flux_on_grid(
+
+    radii, temperature_k = _effective_temperature_profile(
         a_star=a_star,
         eddington_ratio=eddington_ratio,
         delta_eta=delta_eta,
         settings=settings,
     )
-    positive_flux = np.maximum(flux, 0.0)
-    temperature_kev = settings.temperature_scale_kev * np.power(positive_flux, 0.25)
-    spectral_flux = _integrate_disk_spectrum(
-        energy_bins.centers_kev,
-        radii,
-        temperature_kev,
-        f_col,
-        inclination_deg,
+    r_g = gravitational_radius_m(black_hole_mass_kg(settings.mass_msun))
+    observer_distance = distance_m(settings.distance_kpc)
+    projected = cos(radians(inclination_deg))
+    radial_width = np.gradient(radii)
+    annulus_area = 2.0 * pi * radii * radial_width * (r_g * r_g) * projected
+
+    frequency = energy_bins.centers_kev * KILO_ELECTRON_VOLT_J / PLANCK_CONSTANT_J_S
+    frequency_width = (
+        energy_bins.widths_kev * KILO_ELECTRON_VOLT_J / PLANCK_CONSTANT_J_S
     )
-    return spectral_flux * energy_bins.widths_kev
+    flux_nu = np.zeros_like(frequency)
+    for temperature, area in zip(temperature_k, annulus_area, strict=True):
+        if temperature <= 0.0 or area <= 0.0:
+            continue
+        intensity = diluted_blackbody_nu(frequency, float(temperature), f_col)
+        flux_nu += intensity * area / (observer_distance * observer_distance)
+
+    bin_energy_flux = flux_nu * frequency_width * WATT_PER_M2_TO_ERG_PER_S_CM2
+    return _finalize_spectrum(bin_energy_flux)
 
 
 def ray_traced_kerr_thin_disk_energy_flux(
@@ -85,11 +126,16 @@ def ray_traced_kerr_thin_disk_energy_flux(
     settings: KerrThinDiskSettings = DEFAULT_KERR_THIN_DISK_SETTINGS,
     limb_darkening: LimbDarkeningMode = "isotropic",
 ) -> FloatArray:
-    """Return bin energy flux by integrating over image-plane transfer records."""
+    """Return binned energy flux by integrating image-plane transfer records.
 
-    _validate_inputs(
+    The transfer map must be built with ``observer_distance`` equal to the
+    astronomical distance in gravitational radii (see
+    ``scales.observer_distance_rg``) so its stored solid angle is the physical
+    observer solid angle in steradians.
+    """
+
+    _validate_system(
         a_star=a_star,
-        inclination_deg=0.0,
         eddington_ratio=eddington_ratio,
         f_col=f_col,
         delta_eta=delta_eta,
@@ -101,30 +147,28 @@ def ray_traced_kerr_thin_disk_energy_flux(
     if transfer_map.emission_radius.size == 0:
         msg = "transfer_map contains no disk-hit records"
         raise ValueError(msg)
-    if settings.disk_outer_radius_rg <= isco_radius(a_star):
-        msg = "disk_outer_radius_rg must exceed the ISCO"
-        raise ValueError(msg)
     _validate_limb_darkening(limb_darkening)
     _validate_transfer_map_records(transfer_map)
 
-    radii, flux = _disk_flux_on_grid(
+    radii, temperature_k = _effective_temperature_profile(
         a_star=a_star,
         eddington_ratio=eddington_ratio,
         delta_eta=delta_eta,
         settings=settings,
     )
-    positive_flux = np.maximum(flux, 0.0)
-    temperature_grid = settings.temperature_scale_kev * np.power(positive_flux, 0.25)
     hit_temperature = np.interp(
         transfer_map.emission_radius,
         radii,
-        temperature_grid,
+        temperature_k,
         left=0.0,
         right=0.0,
     )
 
-    energy = energy_bins.centers_kev
-    spectral_flux = np.zeros_like(energy)
+    frequency = energy_bins.centers_kev * KILO_ELECTRON_VOLT_J / PLANCK_CONSTANT_J_S
+    frequency_width = (
+        energy_bins.widths_kev * KILO_ELECTRON_VOLT_J / PLANCK_CONSTANT_J_S
+    )
+    flux_nu = np.zeros_like(frequency)
     for redshift, solid_angle, emission_mu, temperature in zip(
         transfer_map.redshift,
         transfer_map.solid_angle,
@@ -134,31 +178,46 @@ def ray_traced_kerr_thin_disk_energy_flux(
     ):
         if temperature <= 0.0:
             continue
-        emitted_energy = energy / redshift
-        intensity = _diluted_blackbody_shape_kev(
-            emitted_energy,
-            temperature_kev=float(temperature),
-            f_col=f_col,
+        emitted_frequency = frequency / redshift
+        intensity = diluted_blackbody_nu(
+            emitted_frequency,
+            float(temperature),
+            f_col,
         )
-        angular_factor = _limb_darkening_factor(
-            float(emission_mu),
-            limb_darkening,
-        )
-        spectral_flux += redshift**3 * angular_factor * intensity * solid_angle
+        angular_factor = _limb_darkening_factor(float(emission_mu), limb_darkening)
+        flux_nu += redshift**3 * angular_factor * intensity * solid_angle
 
-    if not np.all(np.isfinite(spectral_flux)) or np.any(spectral_flux < 0.0):
-        msg = "computed ray-traced disk spectrum is not finite and nonnegative"
-        raise FloatingPointError(msg)
-    if not np.any(spectral_flux > 0.0):
-        msg = "computed ray-traced disk spectrum is identically zero"
-        raise FloatingPointError(msg)
-    return spectral_flux * energy_bins.widths_kev
+    bin_energy_flux = flux_nu * frequency_width * WATT_PER_M2_TO_ERG_PER_S_CM2
+    return _finalize_spectrum(bin_energy_flux, require_positive=True)
+
+
+def _effective_temperature_profile(
+    *,
+    a_star: float,
+    eddington_ratio: float,
+    delta_eta: float,
+    settings: KerrThinDiskSettings,
+) -> tuple[FloatArray, FloatArray]:
+    radii, dimensionless_flux = _disk_flux_on_grid(
+        a_star=a_star,
+        delta_eta=delta_eta,
+        settings=settings,
+    )
+    mass_kg = black_hole_mass_kg(settings.mass_msun)
+    efficiency = nt_efficiency(a_star) + delta_eta
+    mass_accretion_rate = accretion_rate_kg_s(mass_kg, eddington_ratio, efficiency)
+    flux_si = flux_si_from_dimensionless(
+        np.maximum(dimensionless_flux, 0.0),
+        black_hole_mass_kg=mass_kg,
+        mass_accretion_rate_kg_s=mass_accretion_rate,
+    )
+    temperature_k = effective_temperature_from_flux(flux_si)
+    return radii, temperature_k
 
 
 def _disk_flux_on_grid(
     *,
     a_star: float,
-    eddington_ratio: float,
     delta_eta: float,
     settings: KerrThinDiskSettings,
 ) -> tuple[FloatArray, FloatArray]:
@@ -173,31 +232,27 @@ def _disk_flux_on_grid(
         flux = page_thorne_flux_profile(
             a_star,
             radii,
-            mass_accretion_rate=eddington_ratio,
+            mass_accretion_rate=1.0,
         ).flux
     else:
         flux = stressed_page_thorne_flux_profile(
             a_star,
             radii,
             delta_eta=delta_eta,
-            mass_accretion_rate=eddington_ratio,
+            mass_accretion_rate=1.0,
         ).flux
     return radii, np.asarray(flux, dtype=np.float64)
 
 
-def _validate_inputs(
+def _validate_system(
     *,
     a_star: float,
-    inclination_deg: float,
     eddington_ratio: float,
     f_col: float,
     delta_eta: float,
     settings: KerrThinDiskSettings,
 ) -> None:
     _validate_spin(a_star)
-    if not isfinite(inclination_deg) or not 0.0 <= inclination_deg < 90.0:
-        msg = "inclination_deg must be finite and satisfy 0 <= inclination < 90"
-        raise ValueError(msg)
     if not isfinite(eddington_ratio) or eddington_ratio <= 0.0:
         msg = "eddington_ratio must be finite and positive"
         raise ValueError(msg)
@@ -210,18 +265,32 @@ def _validate_inputs(
     if settings.radial_grid_count < 8:
         msg = "radial_grid_count must be at least eight"
         raise ValueError(msg)
-    if (
-        not isfinite(settings.disk_outer_radius_rg)
-        or settings.disk_outer_radius_rg <= 0
-    ):
-        msg = "disk_outer_radius_rg must be finite and positive"
+    if not isfinite(
+        settings.disk_outer_radius_rg
+    ) or settings.disk_outer_radius_rg <= isco_radius(a_star):
+        msg = "disk_outer_radius_rg must be finite and exceed the ISCO"
         raise ValueError(msg)
-    if (
-        not isfinite(settings.temperature_scale_kev)
-        or settings.temperature_scale_kev <= 0
-    ):
-        msg = "temperature_scale_kev must be finite and positive"
+    if not isfinite(settings.mass_msun) or settings.mass_msun <= 0.0:
+        msg = "mass_msun must be finite and positive"
         raise ValueError(msg)
+    if not isfinite(settings.distance_kpc) or settings.distance_kpc <= 0.0:
+        msg = "distance_kpc must be finite and positive"
+        raise ValueError(msg)
+
+
+def _finalize_spectrum(
+    bin_energy_flux: FloatArray,
+    *,
+    require_positive: bool = False,
+) -> FloatArray:
+    spectrum = np.asarray(bin_energy_flux, dtype=np.float64)
+    if not np.all(np.isfinite(spectrum)) or np.any(spectrum < 0.0):
+        msg = "computed disk spectrum is not finite and nonnegative"
+        raise FloatingPointError(msg)
+    if require_positive and not np.any(spectrum > 0.0):
+        msg = "computed ray-traced disk spectrum is identically zero"
+        raise FloatingPointError(msg)
+    return spectrum
 
 
 def _validate_transfer_map_records(transfer_map: TransferMap) -> None:
@@ -262,50 +331,3 @@ def _limb_darkening_factor(
     if limb_darkening == "isotropic":
         return 1.0
     return 0.5 + (0.75 * emission_mu)
-
-
-def _diluted_blackbody_shape_kev(
-    energy_kev: FloatArray,
-    *,
-    temperature_kev: float,
-    f_col: float,
-) -> FloatArray:
-    exponent = energy_kev / (f_col * temperature_kev)
-    local = np.zeros_like(energy_kev)
-    finite_mask = exponent <= 700.0
-    local[finite_mask] = (
-        energy_kev[finite_mask] ** 3 / np.expm1(exponent[finite_mask]) / f_col**4
-    )
-    return local
-
-
-def _integrate_disk_spectrum(
-    energy_kev: FloatArray,
-    radii: FloatArray,
-    temperature_kev: FloatArray,
-    f_col: float,
-    inclination_deg: float,
-) -> FloatArray:
-    projected_area = cos(radians(inclination_deg))
-    radial_width = np.gradient(radii)
-    annulus_weight = 2.0 * pi * radii * radial_width * projected_area
-    intensity = np.zeros((radii.size, energy_kev.size), dtype=np.float64)
-    positive_temperature = temperature_kev > 0.0
-    if not np.any(positive_temperature):
-        msg = "disk spectrum has no positive-temperature annuli"
-        raise FloatingPointError(msg)
-    temperature = temperature_kev[positive_temperature, None]
-    energy = energy_kev[None, :]
-    energy_grid = np.broadcast_to(energy, (temperature.shape[0], energy_kev.size))
-    exponent = energy / (f_col * temperature)
-    finite_mask = exponent <= 700.0
-    local = np.zeros_like(exponent)
-    local[finite_mask] = (
-        energy_grid[finite_mask] ** 3 / np.expm1(exponent[finite_mask]) / f_col**4
-    )
-    intensity[positive_temperature, :] = local
-    spectrum = annulus_weight @ intensity
-    if not np.all(np.isfinite(spectrum)) or np.any(spectrum < 0.0):
-        msg = "computed disk spectrum is not finite and nonnegative"
-        raise FloatingPointError(msg)
-    return np.asarray(spectrum, dtype=np.float64)

@@ -102,15 +102,30 @@ Boyer-Lindquist coordinates ordered as `(t, r, theta, phi)`.
 
 ## Metric Derivatives
 
-- Source equation: derivatives are numerical centered finite differences of
-  the registered Kerr covariant metric above, not independently introduced
-  physical formulae.
-- Implemented in `src/kerrdisk/metric.py::metric_derivatives`.
+- Source equation: derivatives are exact calculus on the registered Kerr
+  covariant and contravariant metric components above, not independently
+  introduced physical formulae. Only the radial and polar derivatives are
+  nonzero because the metric is stationary and axisymmetric.
+- Implementations:
+  - `src/kerrdisk/metric.py::metric_derivatives` — centered finite differences
+    of the covariant metric, retained as an independent oracle.
+  - `src/kerrdisk/metric.py::covariant_metric_derivatives` — closed-form
+    analytic derivatives of `g_mu_nu`.
+  - `src/kerrdisk/metric.py::contravariant_metric_derivatives` — closed-form
+    analytic derivatives of `g^mu_nu`, used in the geodesic force term.
+- The analytic contravariant derivatives replace the earlier finite-difference
+  stencil inside `geodesics.py::geodesic_rhs`. This removes four metric
+  inversions per force evaluation and eliminates the finite-difference step as
+  a numerical parameter.
 - Tests:
-  - returned derivative tensor has shape `(4, 4, 4)`;
-  - derivatives with respect to `t` and `phi` are zero because the metric is
-    stationary and axisymmetric;
-  - finite values outside the horizon.
+  - returned derivative tensors have shape `(4, 4, 4)`;
+  - `t` and `phi` derivatives are zero (stationarity and axisymmetry);
+  - analytic covariant derivatives match the finite-difference oracle;
+  - analytic contravariant derivatives match centered differences of
+    `contravariant_metric`;
+  - analytic derivatives satisfy the exact identity
+    `d(g^-1) = -g^-1 (dg) g^-1` across the valid domain (Hypothesis);
+  - domain errors outside the horizon and at the coordinate axis.
 
 ## Page-Thorne Zero-Torque Disk Flux
 
@@ -864,6 +879,45 @@ Boyer-Lindquist coordinates ordered as `(t, r, theta, phi)`.
   - emitted photons satisfy the null Hamiltonian constraint;
   - sampled outcome accounting conserves the sample count;
   - invalid local emission inputs fail explicitly.
+
+## Physical Scales and Observed Normalization
+
+- Purpose: convert the dimensionless geometric-unit disk physics into an
+  absolutely normalized observed spectrum for a physical system defined by
+  black-hole mass, distance, inclination, and Eddington ratio. This replaces the
+  earlier arbitrary `temperature_scale_kev` shape parameter.
+- Scale relations (SI):
+  - Gravitational radius `r_g = G M / c^2`.
+  - Eddington luminosity (hydrogen, Thomson scattering)
+    `L_Edd = 4 pi G M m_p c / sigma_T`.
+  - Accretion rate from the Eddington ratio `ell = L / L_Edd` and radiative
+    efficiency `eta`: `Mdot = ell L_Edd / (eta c^2)`. For the zero-torque disk
+    `eta = 1 - E(r_isco)`; for the controlled stress model the total efficiency
+    `eta = [1 - E(r_isco)] + Delta_eta` is used so `ell` remains `L_total/L_Edd`.
+  - Photon frequency from energy `nu = E_keV * (10^3 e) / h`.
+- Effective temperature: `T_eff(r) = [F_SI(r) / sigma_SB]^{1/4}`, with `F_SI`
+  from the registered Page-Thorne SI conversion evaluated at the physical `Mdot`.
+- Local emission: the registered diluted blackbody
+  `I_nu,em = B_nu(f_col T_eff) / f_col^4`.
+- Observed flux: `F_nu,obs = sum_hits g^3 D(mu) I_nu,em(nu_obs/g) dOmega`, where
+  `g` is the redshift factor, `D(mu)` the limb-darkening factor, and `dOmega` the
+  observer solid angle per image pixel. With screen coordinates and the
+  astronomical distance both expressed in `r_g`, the transfer map's stored
+  `solid_angle = d_alpha d_beta / observer_distance^2` is the physical solid
+  angle in steradians, so the `r_g^2` pixel-area factor and the `D^-2` distance
+  factor are captured automatically. The binned observable is
+  `F_nu,obs * d_nu` per bin, reported in `erg s^-1 cm^-2`.
+- Implemented in:
+  - `src/kerrdisk/scales.py`
+  - `src/kerrdisk/thermal_spectrum.py::_effective_temperature_profile`
+  - `src/kerrdisk/thermal_spectrum.py::kerr_thin_disk_energy_flux`
+  - `src/kerrdisk/thermal_spectrum.py::ray_traced_kerr_thin_disk_energy_flux`
+- Expected behavior and tests:
+  - `r_g`, `L_Edd`, and `Mdot` reproduce standard values for a ten-solar-mass
+    black hole; the accretion rate reproduces the target luminosity;
+  - the observed flux scales as `D^-2`;
+  - the peak effective temperature lies in the soft X-ray band for the fiducial
+    ten-solar-mass system.
 
 ## Future Equations
 

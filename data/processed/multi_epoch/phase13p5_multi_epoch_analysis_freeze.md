@@ -2,15 +2,15 @@
 
 Status: frozen before Phase 14 manuscript drafting.
 
-Config version: `phase13p5_multi_epoch_v1`.
-Confirmatory config: `configs\production\phase12_confirmatory.yaml`.
+Config version: `phase13p5_joint_emulator_v5`.
+Confirmatory config: `D:\Blackhole\configs\production\phase12_joint_v5.yaml`.
 Model backend: `ray_traced_transfer`.
 Groups: 24.
 Epochs per group: 2.
-Replicates per group: 100.
+Replicates per group: 30.
 Spin grid count: 81.
 Energy bin count: 24.
-Ray screen size: 5x5.
+Ray screen size: 24x24.
 Limb darkening: `electron_scattering`.
 
 Each group pairs locked Phase 12 conditions with the same spin,

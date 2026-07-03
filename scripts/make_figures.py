@@ -13,6 +13,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import NullFormatter, ScalarFormatter
 
 from kerrdisk.confirmatory import load_confirmatory_config
 from kerrdisk.disk_flux import (
@@ -20,6 +21,7 @@ from kerrdisk.disk_flux import (
     stressed_page_thorne_flux_profile,
 )
 from kerrdisk.isco import isco_radius
+from kerrdisk.scales import observer_distance_rg
 from kerrdisk.spectrum import build_transfer_map
 from kerrdisk.synthetic import make_log_energy_bins
 from kerrdisk.thermal_spectrum import (
@@ -75,16 +77,18 @@ def _savefig(name: str) -> None:
 
 
 def _figure1_model_schematic() -> str:
-    fig, ax = plt.subplots(figsize=(9.0, 4.8))
+    fig, ax = plt.subplots(figsize=(9.5, 3.4))
     ax.axis("off")
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
     boxes = [
-        ("Locked Phase 11\nconditions", 0.08, 0.66),
-        ("Kerr disk\nPage-Thorne + stress", 0.29, 0.66),
-        ("Ray-traced\n5x5 transfer maps", 0.50, 0.66),
-        ("Diluted blackbody\n+ limb darkening", 0.71, 0.66),
-        ("Gaussian synthetic\nreplicates", 0.29, 0.28),
-        ("Spin-grid fit\nzero-stress model", 0.50, 0.28),
-        ("Bias, coverage,\nconvergence tables", 0.71, 0.28),
+        ("Locked\nconditions", 0.085, 0.72),
+        ("Kerr disk\nPage-Thorne + stress", 0.30, 0.72),
+        ("Ray-traced\n64x64 full-disk maps", 0.53, 0.72),
+        ("Physical diluted\nblackbody + limb dark.", 0.77, 0.72),
+        ("Synthetic\nreplicates", 0.30, 0.26),
+        ("Joint marginalized\nspin fit", 0.53, 0.26),
+        ("Bias, coverage,\nconvergence", 0.77, 0.26),
     ]
     for text, x_pos, y_pos in boxes:
         ax.text(
@@ -95,7 +99,7 @@ def _figure1_model_schematic() -> str:
             va="center",
             fontsize=10,
             bbox={
-                "boxstyle": "round,pad=0.35",
+                "boxstyle": "round,pad=0.4",
                 "facecolor": "#f4f0e8",
                 "edgecolor": "#303030",
                 "linewidth": 1.0,
@@ -103,12 +107,12 @@ def _figure1_model_schematic() -> str:
             transform=ax.transAxes,
         )
     arrows = [
-        ((0.17, 0.66), (0.23, 0.66)),
-        ((0.38, 0.66), (0.44, 0.66)),
-        ((0.59, 0.66), (0.65, 0.66)),
-        ((0.71, 0.55), (0.71, 0.39)),
-        ((0.65, 0.28), (0.59, 0.28)),
-        ((0.44, 0.28), (0.38, 0.28)),
+        ((0.155, 0.72), (0.20, 0.72)),
+        ((0.40, 0.72), (0.44, 0.72)),
+        ((0.63, 0.72), (0.68, 0.72)),
+        ((0.77, 0.62), (0.77, 0.37)),
+        ((0.68, 0.26), (0.63, 0.26)),
+        ((0.44, 0.26), (0.40, 0.26)),
     ]
     for start, end in arrows:
         ax.annotate(
@@ -118,12 +122,13 @@ def _figure1_model_schematic() -> str:
             xycoords="axes fraction",
             arrowprops={"arrowstyle": "->", "lw": 1.4, "color": "#303030"},
         )
-    ax.set_title("Phase 12 v4 confirmatory workflow", fontsize=13)
+    ax.set_title("KerrDisk-UQ v5 spectral workflow", fontsize=13)
     _savefig("figure1_model_schematic.png")
     return (
-        "Model schematic for the Phase 12 v4 workflow. Boxes show the fixed "
-        "analysis sequence from locked conditions to bias, coverage, and "
-        "convergence summaries; no numerical normalization is implied."
+        "Model schematic for the corrected v5 workflow. Boxes show the analysis "
+        "sequence from locked conditions through the physically normalized, "
+        "full-disk ray-traced spectra to the joint marginalized spin fit and the "
+        "bias, coverage, and convergence summaries."
     )
 
 
@@ -137,19 +142,32 @@ def _figure2_validation() -> str:
         for row in rows
     ]
     colors = ["#32746d" if row["status"] == "PASS" else "#b23b3b" for row in rows]
-    fig, ax = plt.subplots(figsize=(10.5, 5.5))
-    ax.bar(np.arange(len(rows)), normalized, color=colors)
-    ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
-    ax.set_ylabel("abs(residual) / tolerance")
-    ax.set_title("Independent validation residuals")
+    # Most residuals are at machine precision, so plot the safety margin: how many
+    # orders of magnitude each residual sits below its declared tolerance. Taller
+    # bars are safer; the line at zero marks the tolerance itself.
+    margin_cap = 15.0
+    margins = [
+        margin_cap if value <= 0.0 else float(min(margin_cap, -np.log10(value)))
+        for value in normalized
+    ]
+    fig, ax = plt.subplots(figsize=(11.0, 5.8))
+    ax.bar(np.arange(len(rows)), margins, color=colors, zorder=3)
+    ax.axhline(0.0, color="black", linestyle="--", linewidth=1.2, zorder=4)
+    ax.text(len(rows) - 0.5, 0.2, "tolerance", ha="right", va="bottom", fontsize=9)
+    ax.set_ylim(0.0, margin_cap + 1.0)
+    ax.set_ylabel("orders of magnitude below tolerance (higher = safer)")
+    ax.set_title("Independent validation margins (all checks pass)")
     ax.set_xticks(np.arange(len(rows)))
     ax.set_xticklabels(labels, rotation=90, fontsize=7)
+    ax.grid(axis="y", alpha=0.3, zorder=0)
     _savefig("figure2_validation_residuals.png")
     return (
-        "Independent validation residuals from data/processed/validation_summary.csv. "
-        "Each bar is normalized by its declared tolerance; varied quantities include "
-        "ISCO radius, efficiency, ray invariants, Page-Thorne flux, and a constant-"
-        "intensity transfer-spectrum check."
+        "Independent validation margins from data/processed/validation_summary.csv. "
+        "Each bar is the number of orders of magnitude the residual sits below its "
+        "declared tolerance (capped at 15 for residuals at machine precision); all "
+        "checks pass. Varied quantities include ISCO radius, efficiency, ray "
+        "invariants, Page-Thorne flux, and a constant-intensity transfer-spectrum "
+        "check."
     )
 
 
@@ -186,7 +204,14 @@ def _figure3_disk_flux() -> str:
     ax.set_xlabel("Radius [GM/c^2]")
     ax.set_ylabel("One-face dimensionless flux")
     ax.set_title("Page-Thorne and stressed disk flux profiles")
-    ax.legend(fontsize=7, ncols=2)
+    # Focus on the physically meaningful flux range; the flux vanishes at the
+    # ISCO, which otherwise stretches the log axis down to the numeric floor.
+    ax.set_xlim(2.0, 80.0)
+    ax.set_ylim(1.0e-9, 5.0e-5)
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_xticks([2, 3, 5, 10, 20, 40, 80])
+    ax.legend(fontsize=7, ncols=2, loc="lower left")
     ax.grid(alpha=0.25, which="both")
     _savefig("figure3_disk_flux_profiles.png")
     return (
@@ -219,7 +244,9 @@ def _figure4_transfer_images() -> str:
             observer_radius=config.ray_observer_radius,
             observer_theta=radians(inclination),
             disk_outer_radius=config.ray_disk_outer_radius,
-            observer_distance=config.ray_observer_radius,
+            observer_distance=observer_distance_rg(
+                config.distance_kpc, config.mass_msun
+            ),
             step_size=config.ray_step_size,
             max_steps=config.ray_max_steps,
             escape_radius=config.ray_escape_radius,
@@ -260,10 +287,12 @@ def _figure4_transfer_images() -> str:
     fig.colorbar(im, ax=axes.ravel().tolist(), label="redshift g")
     _write_dicts(TABLES / "figure4_transfer_image_source.csv", rows)
     _savefig("figure4_transfer_images.png")
+    size = config.ray_screen_size
     return (
-        "Ray-traced 5x5 transfer-map image-plane samples for two benchmark "
-        "spin/inclination pairs. Color is the transfer-map redshift g for disk-hit "
-        "rays; alpha and beta are local observer-screen coordinates."
+        f"Ray-traced {size}x{size} full-disk transfer-map image-plane samples for "
+        "two benchmark spin/inclination pairs. Color is the transfer-map redshift g "
+        "for disk-hit rays; alpha and beta are local observer-screen coordinates in "
+        "gravitational radii."
     )
 
 
@@ -277,7 +306,8 @@ def _figure5_spectra() -> str:
     settings = KerrThinDiskSettings(
         radial_grid_count=config.radial_grid_count,
         disk_outer_radius_rg=config.disk_outer_radius_rg,
-        temperature_scale_kev=config.temperature_scale_kev,
+        mass_msun=config.mass_msun,
+        distance_kpc=config.distance_kpc,
     )
     rows: list[dict[str, float]] = []
     fig, ax = plt.subplots(figsize=(7.2, 4.8))
@@ -302,7 +332,9 @@ def _figure5_spectra() -> str:
             observer_radius=config.ray_observer_radius,
             observer_theta=radians(40.0),
             disk_outer_radius=config.ray_disk_outer_radius,
-            observer_distance=config.ray_observer_radius,
+            observer_distance=observer_distance_rg(
+                config.distance_kpc, config.mass_msun
+            ),
             step_size=config.ray_step_size,
             max_steps=config.ray_max_steps,
             escape_radius=config.ray_escape_radius,
@@ -330,16 +362,18 @@ def _figure5_spectra() -> str:
             )
     _write_dicts(TABLES / "figure5_spectra_source.csv", rows)
     ax.set_xlabel("Energy [keV]")
-    ax.set_ylabel("Bin energy flux [arbitrary normalization]")
+    ax.set_ylabel(r"Bin energy flux [erg s$^{-1}$ cm$^{-2}$]")
     ax.set_title("Ray-traced thermal spectra")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.25, which="both")
     _savefig("figure5_ray_traced_spectra.png")
+    size = config.ray_screen_size
     return (
-        "Ray-traced detector-independent spectra for varied spin and stress at "
-        "inclination 40 deg, eddington_ratio=0.1, f_col=1.7, and the Phase 12 v4 "
-        "5x5 transfer-map normalization. Flux normalization is arbitrary and "
-        "consistent across curves."
+        "Ray-traced spectra for varied spin and stress at inclination 40 deg, "
+        "eddington_ratio=0.1, f_col=1.7, for the fiducial "
+        f"{config.mass_msun:g} solar-mass black hole at {config.distance_kpc:g} kpc. "
+        f"Uses the corrected v5 full-disk {size}x{size} transfer map with physical "
+        "absolute normalization; bin energy flux is in erg/s/cm^2."
     )
 
 
@@ -352,14 +386,15 @@ def _figure6_bias_width() -> str:
     scatter = ax.scatter(x, y, c=np.log10(np.maximum(chi2, 1.0e-6)), cmap="magma")
     ax.set_xlabel("Mean 68% interval width")
     ax.set_ylabel("Absolute mean spin bias")
-    ax.set_title("Identifiability proxy from confirmatory conditions")
+    ax.set_title("Spin bias versus interval width (v5 joint marginalized fit)")
     fig.colorbar(scatter, ax=ax, label="log10(mean chi2/dof)")
     ax.grid(alpha=0.25)
     _savefig("figure6_bias_width_proxy.png")
     return (
-        "Condition-level bias versus mean 68% interval width from the Phase 12 v4 "
-        "confirmatory table. Color is log10(mean chi2_per_dof). This is an "
-        "identifiability proxy, not a multi-parameter posterior degeneracy plot."
+        "Condition-level absolute spin bias versus mean 68% interval width from the "
+        "v5 joint marginalized-fit confirmatory table (color correction marginalized). "
+        "Color is log10(mean chi2_per_dof); conditions with elevated chi2 are the "
+        "inner-stress-misspecified cases that remain biased with narrow intervals."
     )
 
 

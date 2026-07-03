@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import isfinite, pi
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -18,10 +19,12 @@ from kerrdisk.raytrace import (
     initial_photon_covector,
     static_observer_tetrad,
     trace_ray,
+    trace_ray_adaptive,
 )
 
 type FloatArray = NDArray[np.float64]
 type IntensityFunction = Callable[[FloatArray, float], FloatArray]
+type IntegratorMode = Literal["fixed", "adaptive"]
 
 
 @dataclass(frozen=True)
@@ -78,6 +81,37 @@ def _uniform_spacing(name: str, values: FloatArray) -> float:
         msg = f"{name} must be uniformly spaced for Phase 6 screen integration"
         raise ValueError(msg)
     return float(spacing[0])
+
+
+def full_disk_screen_axes(
+    disk_outer_radius: float,
+    screen_size: int,
+    *,
+    margin: float = 1.4,
+) -> tuple[FloatArray, FloatArray]:
+    """Return symmetric cell-centered screen axes covering the disk image.
+
+    The image-plane half-width is ``margin * disk_outer_radius`` in
+    gravitational radii, large enough to contain the primary disk image (from
+    the inner edge near the ISCO out to the outer radius) with room for
+    gravitational lensing. Rays are placed at cell centers. The observer must
+    be at a radius much larger than this half-width for the flat-screen
+    small-angle mapping to remain accurate.
+    """
+
+    if not isfinite(disk_outer_radius) or disk_outer_radius <= 0.0:
+        msg = "disk_outer_radius must be finite and positive"
+        raise ValueError(msg)
+    if screen_size < 2:
+        msg = "screen_size must be at least two"
+        raise ValueError(msg)
+    if not isfinite(margin) or margin <= 1.0:
+        msg = "margin must be finite and greater than one"
+        raise ValueError(msg)
+    half_width = margin * disk_outer_radius
+    cell_width = (2.0 * half_width) / screen_size
+    axis = -half_width + (np.arange(screen_size, dtype=np.float64) + 0.5) * cell_width
+    return axis, axis.copy()
 
 
 def circular_emitter_four_velocity(a_star: float, radius: float) -> FloatArray:
@@ -190,10 +224,21 @@ def build_transfer_map(
     step_size: float = 0.05,
     max_steps: int = 10_000,
     escape_radius: float | None = None,
+    integrator: IntegratorMode = "adaptive",
+    rtol: float = 1.0e-9,
+    atol: float = 1.0e-11,
 ) -> TransferMap:
-    """Trace a screen grid and return successful disk-hit transfer records."""
+    """Trace a screen grid and return successful disk-hit transfer records.
+
+    The ``integrator`` selects the adaptive Dormand-Prince RK45 tracer
+    (default, error-controlled through ``rtol``/``atol``) or the fixed-step RK4
+    reference tracer using ``step_size``.
+    """
 
     _validate_spin(a_star)
+    if integrator not in {"fixed", "adaptive"}:
+        msg = "integrator must be 'fixed' or 'adaptive'"
+        raise ValueError(msg)
     alpha_axis = _validate_screen_axis("alpha_values", alpha_values)
     beta_axis = _validate_screen_axis("beta_values", beta_values)
     if not isfinite(observer_radius) or observer_radius <= 0.0:
@@ -241,15 +286,27 @@ def build_transfer_map(
                 float(alpha),
                 float(beta),
             )
-            result = trace_ray(
-                a_star,
-                initial_state,
-                step_size=step_size,
-                max_steps=max_steps,
-                escape_radius=escape_radius,
-                disk_inner_radius=disk_inner_radius,
-                disk_outer_radius=disk_outer_radius,
-            )
+            if integrator == "adaptive":
+                result = trace_ray_adaptive(
+                    a_star,
+                    initial_state,
+                    rtol=rtol,
+                    atol=atol,
+                    max_steps=max_steps,
+                    escape_radius=escape_radius,
+                    disk_inner_radius=disk_inner_radius,
+                    disk_outer_radius=disk_outer_radius,
+                )
+            else:
+                result = trace_ray(
+                    a_star,
+                    initial_state,
+                    step_size=step_size,
+                    max_steps=max_steps,
+                    escape_radius=escape_radius,
+                    disk_inner_radius=disk_inner_radius,
+                    disk_outer_radius=disk_outer_radius,
+                )
             outcome_counts[result.outcome.value] += 1
             if result.outcome != RayOutcome.DISK_HIT:
                 continue

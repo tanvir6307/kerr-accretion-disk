@@ -9,12 +9,32 @@ from hypothesis import strategies as st
 
 from kerrdisk.metric import (
     contravariant_metric,
+    contravariant_metric_derivatives,
     covariant_metric,
+    covariant_metric_derivatives,
     horizon_radius,
     kerr_auxiliary,
     metric_derivatives,
     metric_inverse_residual,
 )
+
+
+def _finite_difference_contravariant(
+    a_star: float,
+    radius: float,
+    theta: float,
+    step: float = 1.0e-6,
+) -> np.ndarray:
+    tensor = np.zeros((4, 4, 4), dtype=np.float64)
+    tensor[1] = (
+        contravariant_metric(a_star, radius + step, theta)
+        - contravariant_metric(a_star, radius - step, theta)
+    ) / (2.0 * step)
+    tensor[2] = (
+        contravariant_metric(a_star, radius, theta + step)
+        - contravariant_metric(a_star, radius, theta - step)
+    ) / (2.0 * step)
+    return tensor
 
 
 @pytest.mark.parametrize(
@@ -129,3 +149,52 @@ def test_metric_derivatives_reject_invalid_step() -> None:
 def test_metric_derivatives_reject_axis_crossing_stencil() -> None:
     with pytest.raises(ValueError, match="theta"):
         metric_derivatives(a_star=0.4, radius=8.0, theta=1.0e-6)
+
+
+def test_analytic_covariant_derivatives_match_finite_difference() -> None:
+    analytic = covariant_metric_derivatives(a_star=0.6, radius=7.0, theta=1.1)
+    finite = metric_derivatives(a_star=0.6, radius=7.0, theta=1.1)
+
+    assert analytic.shape == (4, 4, 4)
+    assert np.allclose(analytic[0], 0.0)
+    assert np.allclose(analytic[3], 0.0)
+    assert np.allclose(analytic, finite, rtol=1.0e-6, atol=1.0e-8)
+
+
+def test_analytic_contravariant_derivatives_match_finite_difference() -> None:
+    analytic = contravariant_metric_derivatives(a_star=0.6, radius=7.0, theta=1.1)
+    finite = _finite_difference_contravariant(a_star=0.6, radius=7.0, theta=1.1)
+
+    assert analytic.shape == (4, 4, 4)
+    assert np.allclose(analytic[0], 0.0)
+    assert np.allclose(analytic[3], 0.0)
+    assert np.allclose(analytic, finite, rtol=1.0e-6, atol=1.0e-8)
+
+
+@given(
+    a_star=st.floats(min_value=-0.95, max_value=0.95, allow_nan=False),
+    theta=st.floats(min_value=0.3, max_value=2.8, allow_nan=False),
+    offset=st.floats(min_value=0.5, max_value=60.0, allow_nan=False),
+)
+def test_analytic_derivatives_satisfy_inverse_identity(
+    a_star: float,
+    theta: float,
+    offset: float,
+) -> None:
+    radius = horizon_radius(a_star) + offset
+    inverse = contravariant_metric(a_star, radius, theta)
+    covariant_deriv = covariant_metric_derivatives(a_star, radius, theta)
+    contravariant_deriv = contravariant_metric_derivatives(a_star, radius, theta)
+
+    for axis in (1, 2):
+        expected = -inverse @ covariant_deriv[axis] @ inverse
+        assert np.allclose(
+            contravariant_deriv[axis], expected, rtol=1.0e-9, atol=1.0e-9
+        )
+
+
+def test_analytic_contravariant_derivatives_reject_horizon() -> None:
+    with pytest.raises(ValueError, match="outside"):
+        contravariant_metric_derivatives(
+            a_star=0.4, radius=horizon_radius(0.4), theta=1.2
+        )
